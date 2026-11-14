@@ -1,0 +1,121 @@
+"""Explicit, small registry. Tools own their logic; the shell owns discovery."""
+TOOLS = (
+    {
+        "id": "json-formatter",
+        "title": "JSON Formatter",
+        "description": "Rapikan, validasi, dan baca JSON dengan lebih nyaman.",
+        "category": "developer",
+        "execution": "browser",
+    },
+    {
+        "id": "text-case",
+        "title": "Ubah Teks",
+        "description": "Ubah kapitalisasi dan hitung kata tanpa pindah aplikasi.",
+        "category": "writing",
+        "execution": "browser",
+    },
+    {
+        "id": "base64",
+        "title": "Base64",
+        "description": "Encode dan decode teks UTF-8 langsung di perangkatmu.",
+        "category": "developer",
+        "execution": "browser",
+    },
+    {
+        "id": "password-generator",
+        "title": "Password Generator",
+        "description": "Buat kata sandi acak yang tetap berada di browser.",
+        "category": "security",
+        "execution": "browser",
+    },
+    {
+        "id": "focus-timer",
+        "title": "Timer Fokus",
+        "description": "Beri satu pekerjaan ruang dan waktu untuk selesai.",
+        "category": "productivity",
+        "execution": "browser",
+    },
+    {
+        "id": "quick-note",
+        "title": "Catatan Cepat",
+        "description": "Tangkap ide singkat. Tersimpan di komputer ini.",
+        "category": "productivity",
+        "execution": "hybrid",
+    },
+    {
+        "id": "daily-tasks",
+        "title": "Tugas Harian",
+        "description": "Atur prioritas, tenggat, dan pekerjaan yang ingin diselesaikan.",
+        "category": "productivity",
+        "execution": "hybrid",
+    },
+    {
+        "id": "snippets",
+        "title": "Pustaka Snippet",
+        "description": "Simpan template, perintah, dan teks yang sering dipakai.",
+        "category": "writing",
+        "execution": "hybrid",
+    },
+    {
+        "id": "csv-json",
+        "title": "CSV & JSON",
+        "description": "Konversi tabel CSV dan JSON dengan nilai teks yang tetap utuh.",
+        "category": "developer",
+        "execution": "browser",
+    },
+    {
+        "id": "text-diff",
+        "title": "Bandingkan Teks",
+        "description": "Buka dua berkas, edit langsung, dan lihat perbedaannya otomatis.",
+        "category": "writing",
+        "execution": "browser",
+    },
+    {
+        "id": "date-time",
+        "title": "Tanggal & Waktu",
+        "description": "Konversi timestamp, zona waktu, dan selisih tanggal.",
+        "category": "productivity",
+        "execution": "browser",
+    },
+    {
+        "id": "url-tools",
+        "title": "URL Toolkit",
+        "description": "Encode, decode, dan baca parameter sebuah URL.",
+        "category": "developer",
+        "execution": "browser",
+    },
+    {
+        "id": "uuid-generator",
+        "title": "UUID Generator",
+        "description": "Buat UUID v4 acak untuk data dan pengujian.",
+        "category": "developer",
+        "execution": "browser",
+    },
+    {
+        "id": "file-hash",
+        "title": "Checksum Berkas",
+        "description": "Hitung dan bandingkan checksum SHA-256 berkas lokal.",
+        "category": "security",
+        "execution": "browser",
+    },
+    {
+        "id": "image-tools",
+        "title": "Olah Gambar",
+        "description": "Resize, konversi, anotasi, dan blur bagian gambar di browser.",
+        "category": "files",
+        "execution": "browser",
+    },
+    {
+        "id": "pdf-to-docx", "title": "PDF ke Word",
+        "description": "Konversi PDF menjadi DOCX editable dengan pemulihan layout.",
+        "category": "files", "execution": "hybrid",
+    },
+    {
+        "id": "capture-studio", "title": "Capture Studio",
+        "description": "Screenshot ke DOCX dan sesi input untuk aplikasi pilihan.",
+        "category": "productivity", "execution": "hybrid",
+    },
+)
+TOOL_IDS = frozenset(tool["id"] for tool in TOOLS)
+DEFAULT_FAVORITES = frozenset({"json-formatter", "focus-timer"})
+

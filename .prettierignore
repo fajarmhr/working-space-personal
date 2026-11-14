@@ -1,0 +1,10 @@
+.runtime
+.cache
+data
+output
+node_modules
+frontend/node_modules
+frontend/dist
+backend/.venv
+frontend/pnpm-lock.yaml
+backend/uv.lock

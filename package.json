@@ -1,0 +1,11 @@
+{
+  "name": "ruang-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A personal, local-first workspace.",
+  "scripts": {
+    "dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev.ps1",
+    "build": "pnpm --dir frontend build",
+    "start": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start.ps1"
+  }
+}

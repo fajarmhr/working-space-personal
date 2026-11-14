@@ -1,0 +1,20 @@
+[project]
+name = "ruang-backend"
+version = "0.1.0"
+description = "Local-first personal workspace API"
+requires-python = ">=3.14,<3.15"
+dependencies = [
+  "django==5.2.19",
+  "django-ninja==1.8.0",
+  "waitress==3.0.2",
+  "whitenoise==6.12.0",
+  "huey==3.5.4",
+  "pdf2docx==0.5.13",
+  "pymupdf==2.1",
+  "python-docx==1.2.0",
+  "pillow==13.0.0",
+]
+
+[tool.uv]
+package = false
+

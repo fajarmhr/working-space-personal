@@ -1,0 +1,11 @@
+minimumReleaseAge: 1440
+minimumReleaseAgeStrict: true
+verifyDepsBeforeRun: error
+ignoreScripts: true
+minimumReleaseAgeExclude:
+  - framer-motion@14.14.0
+  - motion-dom@14.14.0
+  # Security patch for Monaco's pinned transitive sanitizer.
+  - dompurify@3.4.18
+overrides:
+  dompurify: 3.4.18
