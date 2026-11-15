@@ -14,8 +14,12 @@ router = Router(tags=["PDF to DOCX"])
 class PdfJobOut(Schema):
     id: str
     state: Literal["queued", "running", "completed", "failed"]
-    stage: Literal["queued", "validating", "converting", "verifying", "completed", "failed"]
+    stage: Literal["queued", "validating", "ocr", "converting", "verifying", "completed", "failed"]
     mode: Literal["editable"]
+    ocr_mode: Literal['auto', 'off', 'force']
+    ocr_language: Literal['eng+ind', 'eng', 'ind']
+    ocr_pages: list[int]
+    timeout_seconds: int
     filename: str
     created_at: str
     updated_at: str
@@ -28,8 +32,12 @@ class PdfJobOut(Schema):
 
 
 @router.post("/convert", response={202: PdfJobOut})
-def convert_pdf(request, file: File[UploadedFile], mode: Form[Literal["editable"]] = "editable"):
-    return 202, service.create_job(file, mode)
+def convert_pdf(
+    request, file: File[UploadedFile], mode: Form[Literal["editable"]] = "editable",
+    ocr_mode: Form[Literal['auto', 'off', 'force']] = 'auto',
+    ocr_language: Form[Literal['eng+ind', 'eng', 'ind']] = 'eng+ind',
+):
+    return 202, service.create_job(file, mode, ocr_mode=ocr_mode, ocr_language=ocr_language)
 
 
 @router.get("/jobs/{job_id}", response=PdfJobOut)

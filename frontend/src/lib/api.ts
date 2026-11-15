@@ -7,10 +7,9 @@ import type {
   CreateTask,
   DailyTask,
   Note,
-  KeyboardApplication,
-  KeyboardSession,
-  KeyboardStatus,
   PdfJob,
+  PdfOcrMode,
+  PdfOcrLanguage,
   Preferences,
   Snippet,
   ToolId,
@@ -73,10 +72,16 @@ export const api = {
   activity: (tool_id: ToolId, action: string) =>
     request<Activity>('/activity', { method: 'POST', body: JSON.stringify({ tool_id, action }) }),
   clearActivity: () => request<{ deleted: number }>('/activity', { method: 'DELETE' }),
-  pdfConvert: (file: File) => {
+  pdfConvert: (
+    file: File,
+    ocrMode: PdfOcrMode = 'auto',
+    ocrLanguage: PdfOcrLanguage = 'eng+ind',
+  ) => {
     const data = new FormData()
     data.append('file', file)
     data.append('mode', 'editable')
+    data.append('ocr_mode', ocrMode)
+    data.append('ocr_language', ocrLanguage)
     return request<PdfJob>('/pdf/convert', { method: 'POST', body: data })
   },
   pdfJob: (id: string) => request<PdfJob>(`/pdf/jobs/${encodeURIComponent(id)}`),
@@ -86,15 +91,6 @@ export const api = {
   captureTake: () => request<CaptureStatus>('/capture/take', { method: 'POST' }),
   captureStop: () => request<CaptureStatus>('/capture/stop', { method: 'POST' }),
   captureSessions: () => request<{ items: CaptureSession[] }>('/capture/sessions'),
-  keyboardStatus: () => request<KeyboardStatus>('/capture/keyboard/status'),
-  keyboardApps: () => request<{ items: KeyboardApplication[] }>('/capture/keyboard/apps'),
-  keyboardStart: (applications: string[]) =>
-    request<KeyboardStatus>('/capture/keyboard/start', {
-      method: 'POST',
-      body: JSON.stringify({ applications }),
-    }),
-  keyboardStop: () => request<KeyboardStatus>('/capture/keyboard/stop', { method: 'POST' }),
-  keyboardSessions: () => request<{ items: KeyboardSession[] }>('/capture/keyboard/sessions'),
   tasks: () => request<{ items: DailyTask[] }>('/tasks'),
   createTask: (values: CreateTask) =>
     request<DailyTask>('/tasks', { method: 'POST', body: JSON.stringify(values) }),

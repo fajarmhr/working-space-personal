@@ -19,8 +19,8 @@ Semua 17 tools berjalan lokal. Catatan, tugas, snippet, preferensi, favorit, dan
 | UUID generator     | Identitas UUID v4                   | 1–100 ID per proses, menggunakan crypto.randomUUID browser.                                                                  |
 | Checksum berkas    | SHA-256 dan pencocokan              | Maksimal 50 MB; berkas tidak diunggah ke server.                                                                             |
 | Olah gambar        | Resize, format, anotasi, blur        | JPG/PNG/WebP maksimal 20 MB/40 MP; hasil maksimal 20 MP dan sisi 8.192 piksel; maksimal 100 anotasi.                          |
-| PDF ke Word        | PDF ke DOCX editable                | Maksimal 25 MB/100 halaman, satu pekerjaan aktif, batas proses 60 detik. PDF bersandi ditolak; OCR belum tersedia.           |
-| Capture Studio     | Screenshot DOCX dan input pilihan  | Windows, sesi manual. Screenshot maksimal 200 per sesi, 40 MP per gambar/256 MB PNG total; log input maksimal 10 MB.         |
+| PDF ke Word        | PDF ke DOCX editable + OCR          | Maksimal 25 MB/100 halaman, satu pekerjaan aktif, batas proses 5 menit. PDF bersandi ditolak.                               |
+| Capture Studio     | Screenshot ke DOCX                 | Windows, sesi manual. Maksimal 200 screenshot per sesi, 40 MP per gambar/256 MB PNG total.                                |
 
 ## Bandingkan teks
 
@@ -38,15 +38,15 @@ Proteksi formula spreadsheet aktif secara default ketika mengekspor CSV. Nilai y
 
 Format sumber diperiksa dari header berkas dan dimensinya dibatasi sebelum decode. SVG tidak diterima. Ekspor melalui canvas menghapus metadata sumber dan menghasilkan gambar diam. JPEG mengisi area transparan dengan putih. Kualitas hanya berlaku pada JPEG/WebP; PNG tidak memakai pengaturan kualitas lossy. Ukuran berkas hasil tidak selalu lebih kecil.
 
-Anotasi tersedia sebagai kotak, bulat/elips, panah, nomor, tulisan, dan area blur. Pilih bentuk untuk memindahkan, mengubah ukuran, warna/garis, rotasi, serta skew horizontal/vertikal (maksimal ±45°); undo/redo dan hapus tersedia. Tulisan maksimal 1.000 karakter dan nomor 1–999. Anotasi mengikuti ukuran gambar saat resize dan digabung ke piksel saat ekspor. Proyek anotasi tidak disimpan otomatis; simpan gambar hasil sebelum menutup panel.
+Anotasi tersedia sebagai kotak, bulat/elips, panah, nomor, tulisan, dan area blur. Setelah menggambar, mode Pilih aktif otomatis. Seret objek untuk memindahkan, handle sudut untuk resize, dan handle putar untuk rotasi. Tahan Shift saat memutar untuk langkah 15°. Panel properti menyediakan ukuran, warna/garis, rotasi, serta skew horizontal/vertikal (maksimal ±45°); undo/redo dan hapus tersedia. Tulisan maksimal 1.000 karakter dan nomor 1–999. Anotasi mengikuti ukuran gambar saat resize dan digabung ke piksel saat ekspor. Proyek anotasi tidak disimpan otomatis; simpan gambar hasil sebelum menutup panel.
 
 ## PDF ke Word
 
 Unggah PDF untuk menghasilkan DOCX dengan teks yang dapat diedit. Engine lokal mencoba memulihkan paragraf, tabel, kolom, serta gambar. Layout tidak dapat dijamin sama persis: periksa font, tabel, header/footer, dan pemisahan halaman setelah membuka hasil di Word.
 
-PDF tanpa teks terdeteksi, termasuk scan murni, ditolak dan memerlukan OCR dari aplikasi lain. Pada PDF campuran, halaman tanpa teks diberi peringatan dan isi scan tidak menjadi teks editable. Tidak ada mode pengganti berupa gambar halaman maupun layanan cloud/OCR. PDF rusak, bersandi, atau melewati batas ditolak dengan pesan status.
+OCR otomatis membaca halaman scan dengan Tesseract lokal, model `tessdata_best`, dan bahasa Indonesia/Inggris. Pilih bahasa sesuai dokumen; pilih **Baca ulang semua halaman** untuk PDF dengan lapisan teks yang rusak, atau **Tanpa OCR** untuk hanya memakai teks digital. Hasil scan disusun menjadi teks yang terlihat dan dapat diedit, bukan satu gambar halaman. Bentuk huruf asli tidak dipulihkan persis. Scan buram, tulisan tangan, formula, tabel kompleks, dan urutan baca dapat kurang akurat; periksa hasilnya. PDF kosong, rusak, bersandi, atau melewati batas ditolak dengan pesan status.
 
-Pekerjaan berjalan di proses terpisah dengan tahap validasi, konversi, dan verifikasi DOCX. Status dapat dipantau dari panel; satu konversi berjalan pada satu waktu dengan batas 60 detik. Berkas sumber, hasil, status, dan log disimpan di `data/outputs/pdf/<uuid>/`; tidak ada penghapusan otomatis saat ini.
+Pekerjaan berjalan di proses terpisah dengan tahap validasi, OCR bila diperlukan, konversi, dan verifikasi DOCX. Status dan jumlah halaman OCR dapat dipantau dari panel; satu konversi berjalan pada satu waktu dengan batas 5 menit. Pecah scan besar jika melewati batas waktu. Berkas sumber, hasil, status, dan log disimpan di `data/outputs/pdf/<uuid>/`; tidak ada penghapusan otomatis saat ini.
 
 ## Capture Studio
 
@@ -58,18 +58,10 @@ Setiap tangkapan layar utama disimpan sebagai PNG dan ditambahkan ke satu DOCX l
 
 Hentikan sesi setelah selesai, lalu unduh DOCX dari sesi saat ini atau riwayat. Data tersimpan di `data/outputs/captures/<uuid>/` (`frames/`, `report.docx`, dan status). Maksimal 200 screenshot, 40 MP per gambar dan total PNG 256 MB per sesi.
 
-### Perekam input aplikasi pilihan
-
-Pilih satu atau lebih aplikasi: Notepad, Notepad++, Visual Studio Code, Windows PowerShell, PowerShell, Command Prompt, atau Windows Terminal. Mulai sesi secara manual setelah memahami cakupannya. Hanya input aplikasi terpilih yang sedang berada di depan yang dicatat; perpindahan aplikasi memisahkan buffer. Browser dan aplikasi di luar daftar tidak dicatat. Shortcut dapat muncul sebagai tag, misalnya `[CTRL+V]`; isi clipboard tidak dibaca. IME/komposisi teks tidak dijamin direkonstruksi sempurna.
-
-Jendela indikator Windows **Rekam input aktif** tetap terlihat walaupun tab Ruang ditutup, lengkap dengan tombol berhenti. **Ctrl+Alt+Shift+K** adalah shortcut berhenti darurat. Jika indikator atau shortcut darurat gagal disiapkan, sesi tidak mulai merekam. Input sintetis yang ditandai Windows sebagai injected diabaikan.
-
-Kolom password standar Windows disaring secara best-effort; filter ini tidak menjamin rahasia tersaring pada terminal, webview, atau kontrol khusus. Hentikan sesi sebelum memasukkan password, token, atau informasi sensitif. Log bukan rekonstruksi persis dokumen yang sedang diedit: input dicatat per aplikasi/waktu dan disimpan sebagai TXT UTF-8 maksimal 10 MB di `data/outputs/keyboard/<uuid>/`.
-
-Kedua jenis sesi berlanjut sampai dihentikan atau backend berhenti. Tidak ada auto-start atau pemulihan rekaman otomatis. Proses helper memantau umur backend agar tidak tetap merekam setelah proses induk keluar. Pengujian otomatis memakai mock/synthetic input dan gambar buatan; pengujian tersebut tidak merekam layar atau input keyboard nyata.
+Sesi screenshot berlanjut sampai dihentikan atau backend berhenti. Tidak ada auto-start atau pemulihan sesi otomatis. Proses helper memantau umur backend agar berhenti setelah proses induk keluar. Capture Studio tidak menyediakan perekaman input. Pengujian otomatis memakai gambar buatan dan tidak mengambil layar pengguna.
 
 ## Data produktivitas
 
 Simpan tugas/snippet menunggu respons API sebelum memperbarui daftar. Jika gagal, isian editor tetap ada agar dapat dicoba lagi. Penghapusan memakai konfirmasi. Draf otomatis hanya tersedia untuk Catatan Cepat; simpan isian editor tugas/snippet sebelum menutup panel.
 
-Backup workspace menyertakan SQLite, secret, serta folder `data/files/` dan `data/outputs/` jika ada. Hentikan pekerjaan PDF dan sesi capture/input sebelum backup agar hasil tidak berubah saat disalin. Unduhan browser yang disimpan di luar folder tersebut tidak tercakup. Data dan backup tersimpan tanpa enkripsi aplikasi.
+Backup workspace menyertakan SQLite, secret, serta folder `data/files/` dan `data/outputs/` jika ada. Hentikan pekerjaan PDF dan sesi screenshot sebelum backup agar hasil tidak berubah saat disalin. Unduhan browser yang disimpan di luar folder tersebut tidak tercakup. Data dan backup tersimpan tanpa enkripsi aplikasi.

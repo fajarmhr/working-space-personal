@@ -100,6 +100,20 @@ class PdfConversionTests(TestCase):
             process.assert_not_called()
         self.assertFalse(any(service.storage_root().glob("*/source.pdf")))
 
+    def test_ocr_options_are_validated_and_persisted(self):
+        with patch.object(service.subprocess, 'Popen', side_effect=OSError('unavailable')) as process:
+            self.assertEqual(self.post(self.upload(b'%PDF-1.7'), ocr_mode='shell').status_code, 422)
+            self.assertEqual(self.post(self.upload(b'%PDF-1.7'), ocr_language='../eng').status_code, 422)
+            process.assert_not_called()
+            response = self.post(self.upload(b'%PDF-1.7'), ocr_mode='force', ocr_language='ind')
+            self.assertEqual(response.status_code, 202)
+            job = response.json()
+            self.assertEqual(job['ocr_mode'], 'force')
+            self.assertEqual(job['ocr_language'], 'ind')
+            self.assertEqual(job['ocr_pages'], [])
+            self.assertEqual(job['timeout_seconds'], service.CONVERSION_TIMEOUT_SECONDS)
+            self.assertEqual(self.client.get(f"/api/pdf/jobs/{job['id']}").json()['ocr_language'], 'ind')
+
     def test_worker_launch_failure_is_a_persisted_actionable_job(self):
         with patch.object(service.subprocess, "Popen", side_effect=OSError("unavailable")):
             result = self.post(self.upload(b"%PDF-1.7 minimal", "../../contoh.pdf"))
@@ -185,7 +199,7 @@ class PdfConversionTests(TestCase):
         self.assertTrue(log.closed)
         self.assertNotIn(identifier, service._processes)
         self.assertEqual(service.get_job(identifier)["state"], "failed")
-        self.assertIn("60 detik", service.get_job(identifier)["error"])
+        self.assertIn("5 menit", service.get_job(identifier)["error"])
         self.assertFalse((directory / ".result-pending.docx").exists())
 
     def test_shutdown_stops_workers_and_persists_failure(self):

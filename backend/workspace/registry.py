@@ -107,12 +107,12 @@ TOOLS = (
     },
     {
         "id": "pdf-to-docx", "title": "PDF ke Word",
-        "description": "Konversi PDF menjadi DOCX editable dengan pemulihan layout.",
+        "description": "Ubah PDF digital atau scan menjadi DOCX editable dengan OCR lokal.",
         "category": "files", "execution": "hybrid",
     },
     {
         "id": "capture-studio", "title": "Capture Studio",
-        "description": "Screenshot ke DOCX dan sesi input untuk aplikasi pilihan.",
+        "description": "Tangkap langkah kerja dengan hotkey dan simpan ke satu DOCX.",
         "category": "productivity", "execution": "hybrid",
     },
 )

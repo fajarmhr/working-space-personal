@@ -26,7 +26,7 @@ Snapshot versi manifest dan runtime lokal: **15 November 2026, Asia/Makassar**. 
 
 Django menggunakan seri 5.2 LTS dengan patch yang dipin di atas. Dependensi frontend diambil dari dist-tag `latest` stabil pada registry resmi saat pembangunan, lalu dipin ke versi persis. `backend/uv.lock` dan `frontend/pnpm-lock.yaml` mengunci dependensi transitif beserta hash/integrity. Pin tersebut menunjukkan versi yang dipasang, bukan jaminan bahwa tidak ada rilis atau advisori baru setelah snapshot.
 
-pdf2docx membawa dependensi pemrosesan native seperti NumPy 2.5.4, OpenCV headless 5.0.0.93, serta lxml 6.1.3 dalam lockfile saat ini. PyMuPDF digunakan untuk inspeksi PDF, python-docx untuk hasil Word, dan Pillow untuk screenshot/laporan. Monaco beserta worker dibundel sebagai aset lokal; pemakaian normal tidak mengambil editor/font dari CDN. Integrasi screenshot dan input memakai `ctypes`/Win32 dari standard library, tanpa paket keyboard/clipboard tambahan.
+pdf2docx membawa dependensi pemrosesan native seperti NumPy 2.5.4, OpenCV headless 5.0.0.93, serta lxml 6.1.3 dalam lockfile saat ini. PyMuPDF digunakan untuk inspeksi PDF, python-docx untuk hasil Word, dan Pillow untuk screenshot/laporan. Monaco beserta worker dibundel sebagai aset lokal; pemakaian normal tidak mengambil editor/font dari CDN. Integrasi hotkey screenshot memakai `ctypes`/Win32 dari standard library.
 
 Pada 15 November 2026, audit penambahan Monaco menemukan advisori pada dependensi transitif DOMPurify 3.4.15. `frontend/pnpm-workspace.yaml` mengunci override tepat ke **3.4.18**, rilis patch keamanan yang tersedia di registry pada 14 November 2026; lockfile ikut diperbarui. Override ini mencegah pin transitif Monaco memasang versi yang terdampak.
 
@@ -40,7 +40,9 @@ Audit adalah snapshot database advisori pada waktu pemeriksaan, bukan jaminan be
 
 ## Kebutuhan runtime tool baru
 
-Setup memasang wheel Python yang dikunci; tidak perlu Microsoft Word/LibreOffice untuk membuat DOCX. Konversi PDF hanya menghasilkan dokumen editable dan belum menyediakan engine OCR. Sesi screenshot/input global memerlukan desktop Windows interaktif, izin aplikasi yang memadai, dan shortcut yang belum digunakan. Menjalankan server lokal saja tidak mengaktifkan screenshot atau perekaman input.
+Setup memasang wheel Python yang dikunci; tidak perlu Microsoft Word/LibreOffice untuk membuat DOCX. OCR memakai Tesseract yang sudah dibundel PyMuPDF dan model resmi `tessdata_best` berlisensi Apache-2.0 untuk `eng`/`ind`. Model disimpan di `.runtime/ocr/tessdata/`; revisi dan SHA-256 dikunci di `scripts/ocr-models.json` serta diverifikasi `scripts/setup-ocr.ps1`. Tidak ada instalasi executable OCR sistem atau unduhan saat konversi. Model yang hilang/rusak perlu dipasang ulang lewat script tersebut. [Dokumentasi model Tesseract](https://tesseract-ocr.github.io/tessdoc/Data-Files.html).
+
+Sesi screenshot global memerlukan desktop Windows interaktif, izin aplikasi yang memadai, dan shortcut yang belum digunakan. Menjalankan server lokal saja tidak mengaktifkan screenshot.
 
 ## Instalasi
 
@@ -55,9 +57,8 @@ Script `scripts/resolve-versions.mjs` adalah alat pemeliharaan untuk mengubah pi
 - API tidak di-cache, dokumentasi API mati pada mode harian, dan CSP membatasi sumber aset ke aplikasi lokal.
 - Tidak ada login multiuser. Pengguna/proses lain yang sudah memiliki akses komputer tetap berada dalam batas kepercayaan lokal.
 - Secret dihasilkan lokal dan tidak dilacak Git. Data, antrean, runtime, dan backup juga diabaikan Git.
-- PDF, screenshot, dan input sesi disimpan lokal tanpa enkripsi aplikasi di `data/outputs/` dan ikut backup. Tidak ada layanan konversi cloud atau pembacaan clipboard.
-- Perekam input hanya untuk aplikasi allowlist yang dipilih manual, dengan indikator Windows dan hotkey berhenti. Filter password bersifat best-effort dan tidak melindungi semua kontrol/terminal.
-- Worker PDF memiliki timeout, batas ukuran/halaman, dan pada Windows Job Object dengan batas memori 1,5 GiB. Worker native capture/input memantau proses induk dan tidak auto-start.
+- PDF dan screenshot disimpan lokal tanpa enkripsi aplikasi di `data/outputs/` dan ikut backup. Tidak ada layanan konversi cloud.
+- Worker PDF memiliki timeout, batas ukuran/halaman, dan pada Windows Job Object dengan batas memori 1,5 GiB. Worker screenshot memantau proses induk dan tidak auto-start.
 - HTTP loopback digunakan untuk pemakaian lokal. Konfigurasi ini harus ditinjau ulang sebelum aplikasi diakses lewat LAN atau internet.
 
 Sumber resmi: [Django releases](https://www.djangoproject.com/download/), [Node releases](https://nodejs.org/en/about/previous-releases), [Ninja CSRF](https://django-ninja.dev/guide/csrf/), [pnpm settings](https://pnpm.io/settings).

@@ -10,15 +10,6 @@ from uuid import UUID, uuid4
 
 STATES = {"idle", "starting", "active", "stopping", "stopped", "error"}
 HOTKEYS = {"ctrl+shift+s": (0x0002 | 0x0004 | 0x4000, ord("S")), "ctrl+alt+s": (0x0002 | 0x0001 | 0x4000, ord("S"))}
-KEYBOARD_APPLICATIONS = {
-    "notepad.exe": "Notepad",
-    "notepad++.exe": "Notepad++",
-    "code.exe": "Visual Studio Code",
-    "powershell.exe": "Windows PowerShell",
-    "pwsh.exe": "PowerShell",
-    "cmd.exe": "Command Prompt",
-    "windowsterminal.exe": "Windows Terminal",
-}
 
 
 def utc_now() -> str:
@@ -37,7 +28,7 @@ def session_id(value: str) -> str:
 
 
 def session_directory(data_dir: Path, kind: str, identifier: str, *, create=False) -> Path:
-    if kind not in {"captures", "keyboard"}:
+    if kind != "captures":
         raise ValueError("Jenis sesi tidak valid.")
     root = Path(data_dir).resolve() / "outputs" / kind
     directory = root / session_id(identifier)

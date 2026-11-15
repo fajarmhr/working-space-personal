@@ -9,13 +9,14 @@ import {
   WarningCircle,
 } from '@phosphor-icons/react'
 import { api } from '../lib/api'
-import type { PdfJob } from '../lib/types'
+import type { PdfJob, PdfOcrLanguage, PdfOcrMode } from '../lib/types'
 import { Button } from './ui/button'
 
 const JOB_KEY = 'ruang-pdf-job-v1'
 const stages: Record<PdfJob['stage'], string> = {
   queued: 'Menyiapkan pekerjaan',
   validating: 'Memeriksa dokumen',
+  ocr: 'Membaca halaman scan dengan OCR',
   converting: 'Memulihkan teks, tabel, dan layout',
   verifying: 'Memeriksa hasil Word',
   completed: 'DOCX siap diunduh',
@@ -38,6 +39,8 @@ export default function PdfConverter({ onActivity }: { onActivity: (action: stri
   const [error, setError] = useState('')
   const [pollError, setPollError] = useState('')
   const [retry, setRetry] = useState(0)
+  const [ocrMode, setOcrMode] = useState<PdfOcrMode>('auto')
+  const [ocrLanguage, setOcrLanguage] = useState<PdfOcrLanguage>('eng+ind')
   const input = useRef<HTMLInputElement>(null)
   const recorded = useRef('')
   const action = useRef(onActivity)
@@ -92,7 +95,7 @@ export default function PdfConverter({ onActivity }: { onActivity: (action: stri
     setError('')
     setPollError('')
     try {
-      const result = await api.pdfConvert(file)
+      const result = await api.pdfConvert(file, ocrMode, ocrLanguage)
       try {
         localStorage.setItem(JOB_KEY, result.id)
       } catch {
@@ -143,6 +146,44 @@ export default function PdfConverter({ onActivity }: { onActivity: (action: stri
               Pilih PDF untuk mulai. Maksimal 25 MB dan 100 halaman.
             </p>
           )}
+          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="flex min-w-0 flex-col gap-2">
+              <label htmlFor="pdf-ocr-mode" className="field-label text-xs">
+                Pembacaan OCR
+              </label>
+              <select
+                id="pdf-ocr-mode"
+                className="field min-w-0 px-3 text-xs"
+                value={ocrMode}
+                disabled={!!working}
+                onChange={(event) => setOcrMode(event.target.value as PdfOcrMode)}
+              >
+                <option value="auto">Otomatis untuk scan</option>
+                <option value="force">Baca ulang semua halaman</option>
+                <option value="off">Tanpa OCR</option>
+              </select>
+            </div>
+            <div className="flex min-w-0 flex-col gap-2">
+              <label htmlFor="pdf-ocr-language" className="field-label text-xs">
+                Bahasa dokumen
+              </label>
+              <select
+                id="pdf-ocr-language"
+                className="field min-w-0 px-3 text-xs"
+                value={ocrLanguage}
+                disabled={!!working || ocrMode === 'off'}
+                onChange={(event) => setOcrLanguage(event.target.value as PdfOcrLanguage)}
+              >
+                <option value="eng+ind">Indonesia &amp; Inggris</option>
+                <option value="ind">Indonesia</option>
+                <option value="eng">Inggris</option>
+              </select>
+            </div>
+          </div>
+          <p className="mt-3 text-[11px] leading-6 text-muted-foreground">
+            OCR berjalan offline dengan model akurasi tinggi. Mode otomatis mempertahankan teks PDF
+            digital; baca ulang semua halaman untuk mengganti lapisan teks yang rusak.
+          </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Button variant="secondary" onClick={() => input.current?.click()} disabled={!!working}>
               <FileArrowUp size={17} />
@@ -170,12 +211,12 @@ export default function PdfConverter({ onActivity }: { onActivity: (action: stri
               Cocok untuk PDF digital yang memiliki teks yang dapat dipilih.
             </p>
             <p className="py-3 leading-6">
-              PDF scan murni memerlukan OCR terlebih dahulu. PDF yang terkunci perlu dibuka
+              Scan dibaca menjadi teks editable dengan OCR lokal. PDF yang terkunci perlu dibuka
               proteksinya sebelum diproses.
             </p>
             <p className="py-3 leading-6">
-              Halaman tidak diganti dengan gambar. Hasil berupa elemen Word editable dengan
-              pendekatan layout.
+              Periksa ejaan, angka, dan tabel hasil OCR. Scan buram, tulisan tangan, dan formula
+              dapat kurang akurat. Font scan akan didekati dengan font standar.
             </p>
           </div>
         </div>
@@ -207,7 +248,7 @@ export default function PdfConverter({ onActivity }: { onActivity: (action: stri
           className="skeleton h-28 w-full rounded-2xl"
         />
       )}
-      {job && (
+      {!uploading && job && (
         <section
           aria-label="Status konversi PDF"
           className="rounded-[28px] border border-border p-5 sm:p-7"
@@ -226,6 +267,16 @@ export default function PdfConverter({ onActivity }: { onActivity: (action: stri
                 {job.filename}
                 {job.page_count !== null ? ` · ${job.page_count} halaman` : ''}
               </p>
+              {!!job.ocr_pages?.length && (
+                <p className="mt-2 text-[11px] leading-6 text-muted-foreground">
+                  OCR diterapkan pada {job.ocr_pages.length} halaman ·{' '}
+                  {job.ocr_language === 'ind'
+                    ? 'Indonesia'
+                    : job.ocr_language === 'eng'
+                      ? 'Inggris'
+                      : 'Indonesia & Inggris'}
+                </p>
+              )}
             </div>
             {job.download_url && job.state === 'completed' && (
               <Button asChild>

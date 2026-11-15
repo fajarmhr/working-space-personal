@@ -19,7 +19,7 @@ from ninja.errors import HttpError
 
 MAX_PDF_BYTES = 25 * 1024 * 1024
 MAX_PDF_PAGES = 100
-CONVERSION_TIMEOUT_SECONDS = 60
+CONVERSION_TIMEOUT_SECONDS = 300
 MAX_ACTIVE_JOBS = 1
 ACTIVE_STATES = {"queued", "running"}
 _lock = threading.RLock()
@@ -84,6 +84,12 @@ def public_status(status: dict) -> dict:
         "page_count", "progress", "message", "warnings", "error",
     )
     result = {field: status.get(field) for field in fields}
+    result.update(
+        ocr_mode=status.get('ocr_mode', 'off'),
+        ocr_language=status.get('ocr_language', 'eng+ind'),
+        ocr_pages=status.get('ocr_pages', []),
+        timeout_seconds=status.get('timeout_seconds', 60),
+    )
     result["download_url"] = (
         f"/api/pdf/download/{status['id']}" if status.get("state") == "completed" else None
     )
@@ -139,7 +145,7 @@ def _supervise(job_id: str, directory: Path, process: subprocess.Popen, log_file
         except subprocess.TimeoutExpired:
             _stop_process(process)
             with _lock:
-                fail_job(directory, "Konversi melewati batas 60 detik. Coba PDF dengan halaman lebih sedikit.")
+                fail_job(directory, "Konversi melewati batas 5 menit. Coba PDF dengan halaman lebih sedikit.")
             return
         with _lock:
             status = read_status(directory)
@@ -155,6 +161,7 @@ def _supervise(job_id: str, directory: Path, process: subprocess.Popen, log_file
             try:
                 if read_status(directory).get("state") == "failed":
                     (directory / ".result-pending.docx").unlink(missing_ok=True)
+                    (directory / ".ocr-normalized.pdf").unlink(missing_ok=True)
             except (OSError, HttpError):
                 pass
 
@@ -194,10 +201,12 @@ def _active_count() -> int:
     return count
 
 
-def create_job(upload, mode: str = "editable") -> dict:
+def create_job(upload, mode: str = "editable", *, ocr_mode: str = 'auto', ocr_language: str = 'eng+ind') -> dict:
     global _registered_cleanup
     if mode != "editable":
         raise HttpError(422, "Mode konversi belum didukung.")
+    if ocr_mode not in {'auto', 'off', 'force'} or ocr_language not in {'eng+ind', 'eng', 'ind'}:
+        raise HttpError(422, "Pilihan OCR tidak valid.")
     if upload.size > MAX_PDF_BYTES:
         raise HttpError(413, "Ukuran PDF maksimal 25 MB.")
     if upload.size == 0:
@@ -227,6 +236,7 @@ def create_job(upload, mode: str = "editable") -> dict:
             deadline = (datetime.fromisoformat(created) + timedelta(seconds=CONVERSION_TIMEOUT_SECONDS)).isoformat()
             status = write_status(directory, {
                 "id": identifier, "state": "queued", "stage": "queued", "mode": mode,
+                "ocr_mode": ocr_mode, "ocr_language": ocr_language, "ocr_pages": [],
                 "filename": _safe_filename(upload.name), "created_at": created,
                 "deadline_at": deadline, "timeout_seconds": CONVERSION_TIMEOUT_SECONDS,
                 "page_count": None, "progress": 0, "message": "Menyiapkan konversi PDF.",

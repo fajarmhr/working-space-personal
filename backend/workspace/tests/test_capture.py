@@ -12,8 +12,6 @@ from ninja.errors import HttpError
 
 from workspace.capture_common import atomic_json, read_metadata, session_directory, session_id
 from workspace.capture_document import write_capture_document
-from workspace.capture_input import InputBuffer, normalized_applications
-from workspace.capture_keyboard import KeyboardService
 from workspace.capture_service import CaptureService
 
 
@@ -27,8 +25,9 @@ class CaptureFilesystemTests(SimpleTestCase):
             for value in ("../outside", "/absolute", "x", "..\\outside", "{" + identifier + "}"):
                 with self.subTest(value=value), self.assertRaises(ValueError):
                     session_id(value)
-            with self.assertRaises(ValueError):
-                session_directory(root, "anything", identifier)
+            for kind in ("anything", "keyboard"):
+                with self.subTest(kind=kind), self.assertRaises(ValueError):
+                    session_directory(root, kind, identifier)
 
     def test_atomic_metadata_preserves_previous_file_if_replace_fails(self):
         with TemporaryDirectory() as temporary:
@@ -150,168 +149,6 @@ class CaptureServiceTests(SimpleTestCase):
             launch.assert_not_called()
 
 
-class InputScopeTests(SimpleTestCase):
-    def test_applications_are_allowlisted_and_deduplicated(self):
-        self.assertEqual(normalized_applications(["Code.exe", "code.exe", "notepad.exe"]), ["code.exe", "notepad.exe"])
-        for names in ([], ["chrome.exe"], ["..\\notepad.exe"], ["password-manager.exe"]):
-            with self.assertRaises(ValueError):
-                normalized_applications(names)
-
-    def test_other_applications_and_protected_boundaries_never_join_input(self):
-        lines = []
-        buffer = InputBuffer(["notepad.exe", "code.exe"], lambda *line: lines.append(line))
-        buffer.consume("notepad.exe", "text", "catatan")
-        buffer.consume(None, "boundary")
-        buffer.consume("chrome.exe", "text", "secret must not be recorded")
-        buffer.consume("code.exe", "text", "git status")
-        buffer.consume("code.exe", "enter")
-        self.assertEqual([(app, text) for app, text, _ in lines], [("notepad.exe", "catatan"), ("code.exe", "git status")])
-        self.assertNotIn("secret", str(lines))
-
-    def test_backspace_shortcut_markers_and_long_lines_are_bounded(self):
-        lines = []
-        buffer = InputBuffer(["notepad.exe"], lambda *line: lines.append(line))
-        buffer.consume("notepad.exe", "text", "hellox")
-        buffer.consume("notepad.exe", "backspace")
-        buffer.consume("notepad.exe", "text", " [CTRL+V]")
-        buffer.consume("notepad.exe", "enter")
-        self.assertEqual(lines[0][1], "hello [CTRL+V]")
-        buffer.consume("notepad.exe", "text", "x" * 8192)
-        self.assertEqual(len(lines[1][1]), 8192)
-        self.assertEqual(buffer.text, "")
-
-    def test_keyboard_service_requires_explicit_allowed_apps_and_no_clipboard_package(self):
-        with TemporaryDirectory() as temporary, override_settings(DATA_DIR=Path(temporary)):
-            service = KeyboardService()
-            process = Mock()
-            process.poll.return_value = None
-            process.stdin = io.StringIO()
-            process.wait.return_value = 0
-            with patch.object(service, "supported", return_value=True), patch("workspace.capture_service.subprocess.Popen", return_value=process) as launch:
-                status = service.start(["notepad.exe"])
-                self.assertEqual(status["applications"], ["notepad.exe"])
-                self.assertEqual(launch.call_args.args[0][1:3], ["-m", "workspace.capture_keyboard_worker"])
-                self.assertIn("--applications", launch.call_args.args[0])
-                service.stop()
-
-
-class NativeKeyboardSafetyTests(SimpleTestCase):
-    """Exercise the callback with synthetic structures and mocks, not a Windows hook."""
-    def callback_runtime(self, foreground):
-        import ctypes
-        import threading
-        from workspace.capture_keyboard_worker import NativeKeyboardRuntime
-
-        class Event(ctypes.Structure):
-            _fields_ = [("vkCode", ctypes.c_uint32), ("scanCode", ctypes.c_uint32), ("flags", ctypes.c_uint32), ("time", ctypes.c_uint32), ("dwExtraInfo", ctypes.c_size_t)]
-
-        runtime = NativeKeyboardRuntime.__new__(NativeKeyboardRuntime)
-        runtime.ctypes = ctypes
-        runtime.KeyboardEvent = Event
-        runtime.keyboard_state = (ctypes.c_ubyte * 256)()
-        runtime.stop = threading.Event()
-        runtime.allowed = frozenset({"notepad.exe"})
-        runtime.last_scope = None
-        runtime.hook = None
-        runtime.user = Mock()
-        runtime.user.CallNextHookEx.return_value = 0
-        runtime._foreground = Mock(return_value=foreground)
-        runtime._enqueue = Mock()
-        runtime.on_error = Mock()
-        runtime.request_stop = Mock()
-        return runtime, Event
-
-    def test_callback_rejects_other_apps_password_controls_injected_events_and_stopped_sessions(self):
-        import ctypes
-        for foreground, flags, stopped in [
-            (("chrome.exe", 1, False), 0, False),
-            (("notepad.exe", 1, True), 0, False),
-            (("notepad.exe", 1, False), 0x10, False),
-            (("notepad.exe", 1, False), 0, True),
-        ]:
-            with self.subTest(foreground=foreground, flags=flags, stopped=stopped):
-                runtime, event_type = self.callback_runtime(foreground)
-                if stopped:
-                    runtime.stop.set()
-                event = event_type(ord("A"), 30, flags, 0, 0)
-                runtime._keyboard_event(0, 0x0100, ctypes.addressof(event))
-                runtime._enqueue.assert_not_called()
-                runtime.on_error.assert_not_called()
-
-    def test_callback_only_queues_text_after_foreground_scope_verification(self):
-        import ctypes
-        runtime, event_type = self.callback_runtime(("notepad.exe", 1, False))
-        def convert(key, scan, state, output, length, flags, layout):
-            output.value = "a"
-            return 1
-        runtime.user.ToUnicodeEx.side_effect = convert
-        event = event_type(ord("A"), 30, 0, 0, 0)
-        runtime._keyboard_event(0, 0x0100, ctypes.addressof(event))
-        runtime._enqueue.assert_any_call("notepad.exe", "text", "a")
-        self.assertEqual(runtime._enqueue.call_args_list[0].args, (None, "boundary"))
-        runtime.on_error.assert_not_called()
-
-    def test_foreground_revalidates_executable_when_windows_reuses_a_pid(self):
-        import ctypes
-        from ctypes import wintypes
-        from workspace.capture_keyboard_worker import NativeKeyboardRuntime
-
-        runtime = NativeKeyboardRuntime.__new__(NativeKeyboardRuntime)
-        runtime.ctypes, runtime.types = ctypes, wintypes
-        runtime.allowed = frozenset({"notepad.exe"})
-        runtime.user, runtime.kernel = Mock(), Mock()
-        runtime.user.GetForegroundWindow.return_value = 500
-        runtime.user.GetGUIThreadInfo.return_value = False
-        runtime.GuiThreadInfo = wintypes.DWORD
-        runtime.kernel.OpenProcess.return_value = 123
-        def current_pid(window, pointer):
-            pointer._obj.value = 87
-            return 12
-        runtime.user.GetWindowThreadProcessId.side_effect = current_pid
-        paths = iter((r"C:\Windows\notepad.exe", r"C:\Apps\chrome.exe"))
-        def current_executable(handle, flags, output, size):
-            output.value = next(paths)
-            return True
-        runtime.kernel.QueryFullProcessImageNameW.side_effect = current_executable
-
-        self.assertEqual(runtime._foreground(), ("notepad.exe", 12, False))
-        self.assertEqual(runtime._foreground(), (None, 12, False))
-        self.assertEqual(runtime.kernel.QueryFullProcessImageNameW.call_count, 2)
-        self.assertEqual(runtime.kernel.CloseHandle.call_count, 2)
-        runtime.user.GetForegroundWindow.side_effect = [500, 501]
-        runtime.kernel.QueryFullProcessImageNameW.side_effect = lambda handle, flags, output, size: True
-        self.assertEqual(runtime._foreground(), (None, 0, False))
-
-    def test_callback_boundaries_keep_other_apps_and_password_input_out_of_buffer(self):
-        import ctypes
-        runtime, event_type = self.callback_runtime(("notepad.exe", 1, False))
-        runtime.allowed = frozenset({"notepad.exe", "code.exe"})
-        runtime._foreground.side_effect = [
-            ("notepad.exe", 1, False),
-            ("chrome.exe", 2, False),
-            ("notepad.exe", 1, True),
-            ("code.exe", 3, False),
-            ("notepad.exe", 1, False),
-        ]
-        lines = []
-        buffer = InputBuffer(list(runtime.allowed), lambda *line: lines.append(line))
-        runtime._enqueue.side_effect = buffer.consume
-        def convert(key, scan, state, output, length, flags, layout):
-            output.value = chr(key).lower()
-            return 1
-        runtime.user.ToUnicodeEx.side_effect = convert
-        for key in "ASQBC":
-            event = event_type(ord(key), 30, 0, 0, 0)
-            runtime._keyboard_event(0, 0x0100, ctypes.addressof(event))
-        buffer.flush()
-        self.assertEqual([(app, text) for app, text, _ in lines], [
-            ("notepad.exe", "a"), ("code.exe", "b"), ("notepad.exe", "c"),
-        ])
-        self.assertNotIn("s", "".join(text for _, text, _ in lines))
-        self.assertNotIn("q", "".join(text for _, text, _ in lines))
-        runtime.on_error.assert_not_called()
-
-
 class CaptureApiTests(TestCase):
     """Root mounts capture_api.router; requests remain protected by the shared middleware."""
     def setUp(self):
@@ -319,19 +156,26 @@ class CaptureApiTests(TestCase):
         self.token = self.client.get("/api/bootstrap").json()["csrf_token"]
 
     def test_native_mutations_require_csrf_before_any_service_start(self):
-        for path, payload in (("/start", {"hotkey": "ctrl+shift+s"}), ("/take", {}), ("/stop", {}), ("/keyboard/start", {"applications": ["notepad.exe"]}), ("/keyboard/stop", {})):
-            with self.subTest(path=path), patch("workspace.capture_api.capture_service.start") as capture, patch("workspace.capture_api.keyboard_service.start") as keyboard:
+        for path, payload in (("/start", {"hotkey": "ctrl+shift+s"}), ("/take", {}), ("/stop", {})):
+            with self.subTest(path=path), patch("workspace.capture_api.capture_service.start") as capture:
                 response = self.client.post("/api/capture" + path, data=json.dumps(payload), content_type="application/json")
                 self.assertEqual(response.status_code, 403)
                 capture.assert_not_called()
-                keyboard.assert_not_called()
 
     def test_invalid_input_and_foreign_origin_cannot_launch_recording(self):
-        for path, payload, expected in (("/start", {"hotkey": "invalid"}, 422), ("/keyboard/start", {"applications": ["chrome.exe"]}, 422), ("/keyboard/start", {"applications": []}, 422)):
-            with self.subTest(path=path), patch("workspace.capture_api.capture_service.start") as capture, patch("workspace.capture_api.keyboard_service.start") as keyboard:
+        for path, payload, expected in (("/start", {"hotkey": "invalid"}, 422),):
+            with self.subTest(path=path), patch("workspace.capture_api.capture_service.start") as capture:
                 response = self.client.post("/api/capture" + path, data=json.dumps(payload), content_type="application/json", HTTP_X_CSRFTOKEN=self.token)
                 self.assertEqual(response.status_code, expected)
                 capture.assert_not_called()
-                keyboard.assert_not_called()
         foreign = self.client.post("/api/capture/start", data='{"hotkey":"ctrl+shift+s"}', content_type="application/json", HTTP_X_CSRFTOKEN=self.token, HTTP_ORIGIN="https://foreign.example")
         self.assertEqual(foreign.status_code, 403)
+
+    def test_removed_input_recorder_routes_do_not_exist(self):
+        for path in ("apps", "status", "sessions", f"download/{uuid4()}"):
+            with self.subTest(path=path):
+                self.assertEqual(self.client.get("/api/capture/keyboard/" + path).status_code, 404)
+        for path in ("start", "stop"):
+            with self.subTest(path=path):
+                response = self.client.post("/api/capture/keyboard/" + path, data="{}", content_type="application/json", HTTP_X_CSRFTOKEN=self.token)
+                self.assertEqual(response.status_code, 404)

@@ -37,14 +37,14 @@ Setup membutuhkan internet dan [uv](https://docs.astral.sh/uv/getting-started/in
 - **UUID Generator:** UUID v4 acak, tunggal atau sekaligus.
 - **Checksum Berkas:** SHA-256 dan pencocokan checksum yang diharapkan.
 - **Olah Gambar:** resize, ekspor JPG/PNG/WebP, anotasi kotak/bulat/panah/nomor/tulisan, rotasi/skew bentuk, dan blur area.
-- **PDF ke Word:** konversi lokal ke DOCX editable dengan pemulihan teks, tabel, dan gambar. Hasil perlu diperiksa; layout tidak dijamin identik dan OCR belum tersedia.
-- **Capture Studio:** screenshot ke satu DOCX dengan hotkey dan perekaman input untuk aplikasi pilihan, dalam sesi Windows yang dimulai manual.
+- **PDF ke Word:** konversi lokal ke DOCX editable, termasuk OCR scan Bahasa Indonesia/Inggris. Hasil perlu diperiksa; ejaan OCR dan layout tidak dijamin identik.
+- **Capture Studio:** screenshot ke satu DOCX dengan hotkey, dalam sesi Windows yang dimulai manual.
 
 Workspace menyediakan 17 tools, pencarian alat, favorit, riwayat aktivitas, tema terang/gelap/sistem, dan nama tampilan. Tugas harian dapat dibuka langsung dari sidebar. Detail batas dan cara kerja ada di [docs/TOOLS.md](docs/TOOLS.md).
 
 Untuk screenshot, buka Capture Studio lalu mulai sesi. Default **Ctrl+Shift+S**, alternatif **Ctrl+Alt+S**; setiap tangkapan layar utama ditambahkan ke DOCX dan disimpan otomatis. Sesi tetap berjalan saat berpindah tool atau menutup tab sampai dihentikan, atau backend berhenti.
 
-Perekam input hanya mencatat aplikasi terpilih saat berada di depan. Indikator Windows selalu terlihat dengan tombol berhenti; **Ctrl+Alt+Shift+K** menghentikan sesi darurat. Clipboard tidak dibaca. Filter kolom password bersifat best-effort, terutama tidak andal pada terminal: hentikan sesi sebelum memasukkan password, token, atau informasi sensitif.
+PDF ke Word menggunakan OCR otomatis untuk scan, dengan pilihan bahasa serta opsi membaca ulang seluruh halaman. Engine Tesseract bawaan PyMuPDF memakai model `tessdata_best` Indonesia/Inggris secara offline. Setup mengunduh model dari commit resmi yang dikunci dan memeriksa SHA-256. Untuk memasang ulang model saja, jalankan `powershell -ExecutionPolicy Bypass -File scripts/setup-ocr.ps1`. OCR mendekati font dan posisi sumber; periksa kembali angka, ejaan, tabel kompleks, dan scan yang buram.
 
 ## Development dan pemeriksaan
 
@@ -66,10 +66,9 @@ Data disimpan di folder **`data/`**, terpisah dari source dan diabaikan Git:
 | `data/queue.sqlite3`     | Antrean worker, bila worker digunakan                 |
 | `data/outputs/pdf/<uuid>/` | PDF sumber, DOCX hasil, status, dan log konversi     |
 | `data/outputs/captures/<uuid>/` | PNG tangkapan, DOCX sesi, dan status           |
-| `data/outputs/keyboard/<uuid>/` | Log input TXT dan status sesi                 |
 | `data/backups/`          | Backup ZIP                                            |
 
-Data dan backup belum dienkripsi; perlindungannya mengikuti akses akun dan disk Windows. Perbandingan teks, CSV/JSON, checksum, dan gambar memproses berkas di browser. PDF diunggah ke backend lokal; hasil capture dan rekaman input disimpan di folder `data/outputs/`. Hasil Password Generator tidak dikirim ke backend atau dicatat sebagai riwayat.
+Data dan backup belum dienkripsi; perlindungannya mengikuti akses akun dan disk Windows. Perbandingan teks, CSV/JSON, checksum, dan gambar memproses berkas di browser. PDF diunggah ke backend lokal; hasil konversi dan screenshot disimpan di folder `data/outputs/`. Hasil Password Generator tidak dikirim ke backend atau dicatat sebagai riwayat.
 
 Buat snapshot database yang konsisten, termasuk ketika SQLite memakai WAL:
 

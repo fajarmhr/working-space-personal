@@ -1,4 +1,4 @@
-"""Lifecycle for native helpers. Importing this module starts no recorder or hook."""
+"""Lifecycle for opt-in screenshot helpers. Importing this module starts no process."""
 from __future__ import annotations
 
 import atexit
@@ -44,7 +44,7 @@ class CaptureService:
         metadata = self._metadata()
         if self._process is not None and self._process.poll() is not None:
             if metadata and metadata.get("state") in {"starting", "active", "stopping"}:
-                metadata.update(state="error", busy=False, error="Proses perekaman berhenti. Mulai sesi baru untuk melanjutkan.")
+                metadata.update(state="error", busy=False, error="Proses screenshot berhenti. Mulai sesi baru untuk melanjutkan.")
                 atomic_json(self._directory() / "status.json", metadata)
             if self._process.stdin:
                 try:
@@ -94,10 +94,7 @@ class CaptureService:
         environment = os.environ.copy()
         environment["RUANG_CAPTURE_DATA_DIR"] = str(Path(settings.DATA_DIR).resolve())
         command = [sys.executable, "-m", self.module, "--session-id", metadata["id"], "--parent-pid", str(os.getpid())]
-        if self.kind == "captures":
-            command.extend(["--hotkey", metadata["hotkey"]])
-        else:
-            command.extend(["--applications", ",".join(metadata["applications"])])
+        command.extend(["--hotkey", metadata["hotkey"]])
         self._session_id = metadata["id"]
         try:
             with (directory / "worker-error.log").open("ab") as error_log:
@@ -203,7 +200,7 @@ class CaptureService:
     def download_path(self, identifier):
         directory = self._directory(identifier)
         metadata = read_metadata(directory)
-        path = directory / ("report.docx" if self.kind == "captures" else "input.txt")
+        path = directory / "report.docx"
         if not metadata or metadata.get("id") != directory.name or not path.is_file() or not path.resolve().is_relative_to(Path(settings.DATA_DIR).resolve()):
             raise HttpError(404, "Hasil sesi belum tersedia.")
         return path

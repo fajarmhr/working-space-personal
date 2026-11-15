@@ -9,10 +9,54 @@ import {
   EMPTY_ANNOTATION_HISTORY,
   MAX_ANNOTATIONS,
   validateAnnotation,
+  resizeAnnotation,
+  rotateAnnotation,
 } from '../src/lib/image-annotations.ts'
 
 const shape = (kind = 'rectangle', id = kind) =>
   createAnnotation(kind, { x: 40, y: 70 }, { x: 240, y: 170 }, 1200, 800, 1, id)
+
+const worldPoint = (value, x, y) => {
+  const [a, b, c, d, e, f] = annotationMatrix(value)
+  return { x: a * x + c * y + e, y: b * x + d * y + f }
+}
+
+test('all four resize handles keep the opposite corner fixed after rotation and skew', () => {
+  for (const rotation of [-123, 0, 37]) {
+    for (const corner of ['nw', 'ne', 'sw', 'se']) {
+      const value = { ...shape(), rotation, skewX: 23, skewY: -17 }
+      const sx = corner.endsWith('w') ? -1 : 1
+      const sy = corner.startsWith('n') ? -1 : 1
+      const fixed = worldPoint(value, (-sx * value.width) / 2, (-sy * value.height) / 2)
+      const target = worldPoint(value, sx * (value.width / 2 + 80), sy * (value.height / 2 + 35))
+      const resized = validateAnnotation(resizeAnnotation(value, target, corner))
+      assert.ok(Math.abs(resized.width - 280) < 1e-7)
+      assert.ok(Math.abs(resized.height - 135) < 1e-7)
+      const actualFixed = worldPoint(resized, (-sx * resized.width) / 2, (-sy * resized.height) / 2)
+      const actualTarget = worldPoint(resized, (sx * resized.width) / 2, (sy * resized.height) / 2)
+      assert.ok(Math.hypot(actualFixed.x - fixed.x, actualFixed.y - fixed.y) < 1e-7)
+      assert.ok(Math.hypot(actualTarget.x - target.x, actualTarget.y - target.y) < 1e-7)
+      assert.equal(resized.rotation, rotation)
+      assert.equal(resized.skewX, 23)
+      assert.equal(resized.skewY, -17)
+    }
+  }
+})
+
+test('rotation handles preserve geometry and support angle wrapping and Shift snapping', () => {
+  const value = { ...shape(), rotation: 177, skewX: 18 }
+  const start = { x: value.x + 100, y: value.y }
+  const end = {
+    x: value.x + 100 * Math.cos(Math.PI / 18),
+    y: value.y + 100 * Math.sin(Math.PI / 18),
+  }
+  const rotated = rotateAnnotation(value, start, end)
+  assert.ok(Math.abs(rotated.rotation + 173) < 1e-7)
+  const snapped = rotateAnnotation(value, start, end, true)
+  assert.equal(snapped.rotation, -180)
+  assert.deepEqual({ ...rotated, rotation: value.rotation }, value)
+  assert.equal(rotateAnnotation(value, start, { x: value.x, y: value.y }), value)
+})
 
 test('reverse-direction drawing produces positive bounds and arrows retain drag direction', () => {
   const rectangle = createAnnotation('rectangle', { x: 240, y: 170 }, { x: 40, y: 70 }, 1200, 800)

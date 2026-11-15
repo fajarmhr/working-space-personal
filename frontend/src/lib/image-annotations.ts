@@ -4,6 +4,7 @@ export interface ImagePoint {
   x: number
   y: number
 }
+export type AnnotationCorner = 'nw' | 'ne' | 'se' | 'sw'
 export interface ImageAnnotation {
   id: string
   kind: AnnotationKind
@@ -180,6 +181,44 @@ export function annotationLocalPoint(value: ImageAnnotation, point: ImagePoint):
     x: (d * (point.x - e) - c * (point.y - f)) / determinant,
     y: (-b * (point.x - e) + a * (point.y - f)) / determinant,
   }
+}
+
+/** Resize in the shape's own axes while its opposite corner stays fixed. */
+export function resizeAnnotation(
+  value: ImageAnnotation,
+  point: ImagePoint,
+  corner: AnnotationCorner,
+): ImageAnnotation {
+  const horizontal = corner.endsWith('w') ? -1 : 1
+  const vertical = corner.startsWith('n') ? -1 : 1
+  const anchor = { x: (-horizontal * value.width) / 2, y: (-vertical * value.height) / 2 }
+  const local = annotationLocalPoint(value, point)
+  const width = Math.max(2, Math.min(32768, horizontal * (local.x - anchor.x)))
+  const height = Math.max(2, Math.min(32768, vertical * (local.y - anchor.y)))
+  const center = { x: anchor.x + (horizontal * width) / 2, y: anchor.y + (vertical * height) / 2 }
+  const [a, b, c, d, e, f] = annotationMatrix(value)
+  return {
+    ...value,
+    width,
+    height,
+    x: a * center.x + c * center.y + e,
+    y: b * center.x + d * center.y + f,
+  }
+}
+
+/** Rotate around the existing center; Shift snaps the final angle to 15 degrees. */
+export function rotateAnnotation(
+  value: ImageAnnotation,
+  start: ImagePoint,
+  end: ImagePoint,
+  snap = false,
+): ImageAnnotation {
+  if (Math.hypot(end.x - value.x, end.y - value.y) < 0.001) return value
+  const angle = (point: ImagePoint) => Math.atan2(point.y - value.y, point.x - value.x)
+  const delta = ((angle(end) - angle(start)) * 180) / Math.PI
+  const rotation = value.rotation + delta
+  const normalized = ((((rotation + 180) % 360) + 360) % 360) - 180
+  return { ...value, rotation: snap ? Math.round(normalized / 15) * 15 : normalized }
 }
 
 export function annotationBounds(value: ImageAnnotation) {

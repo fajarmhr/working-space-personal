@@ -1,4 +1,4 @@
-"""One bounded PDF conversion per subprocess; no image-page fallback or OCR."""
+"""Bounded editable PDF conversion with optional local OCR."""
 from __future__ import annotations
 
 import argparse
@@ -24,7 +24,7 @@ class PdfConversionError(ValueError):
     pass
 
 
-def inspect_pdf(path: Path) -> tuple[int, list[str]]:
+def inspect_pdf(path: Path, *, allow_ocr: bool = False) -> tuple[int, list[str]]:
     import pymupdf
 
     warnings: list[str] = []
@@ -53,12 +53,12 @@ def inspect_pdf(path: Path) -> tuple[int, list[str]]:
                     scanned.append(index + 1)
                 if characters > 2_000_000:
                     raise PdfConversionError("Isi PDF terlalu besar. Pecah dokumen menjadi bagian lebih kecil.")
-            if characters == 0:
+            if characters == 0 and not allow_ocr:
                 raise PdfConversionError(
                     "PDF tidak memiliki teks yang dapat diedit, kemungkinan hasil scan. "
-                    "Jalankan OCR terlebih dahulu; fitur ini belum menyediakan OCR."
+                    "Aktifkan OCR otomatis lalu coba lagi."
                 )
-            if scanned:
+            if scanned and not allow_ocr:
                 shown = ", ".join(map(str, scanned[:12])) + (" dan lainnya" if len(scanned) > 12 else "")
                 warnings.append(f"Halaman {shown} tidak memiliki teks terdeteksi; isi scan tidak menjadi teks editable.")
             warnings.append("Font yang tidak tersedia di komputer dapat diganti saat dokumen dibuka di Word.")
@@ -84,7 +84,7 @@ def verify_docx(path: Path) -> None:
             root = ElementTree.fromstring(content)
             text_nodes = root.iter("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t")
             if not any((node.text or "").strip() for node in text_nodes):
-                raise PdfConversionError("Konversi tidak menghasilkan teks editable. Coba PDF lain atau jalankan OCR dahulu.")
+                raise PdfConversionError("Konversi tidak menghasilkan teks editable. Aktifkan OCR untuk scan dan pastikan tulisannya cukup jelas.")
     except (BadZipFile, KeyError, OSError, ElementTree.ParseError) as exc:
         raise PdfConversionError("Hasil DOCX gagal diverifikasi.") from exc
 
@@ -105,6 +105,7 @@ def run_job(job_id: str) -> None:
     directory = job_directory(job_id)
     source = directory / "source.pdf"
     pending = directory / ".result-pending.docx"
+    normalized = directory / '.ocr-normalized.pdf'
     if source.is_symlink() or not source.resolve().is_relative_to(directory):
         fail_job(directory, "Lokasi berkas PDF tidak valid.")
         return
@@ -113,14 +114,33 @@ def run_job(job_id: str) -> None:
             "state": "running", "stage": "validating", "progress": None,
             "message": "Memeriksa halaman dan teks PDF.",
         })
-        count, warnings = inspect_pdf(source)
         initial = read_status(directory)
+        ocr_mode = initial.get('ocr_mode', 'off')
+        count, warnings = inspect_pdf(source, allow_ocr=ocr_mode != 'off')
+        conversion_source = source
+        if ocr_mode != 'off':
+            from workspace.pdf_ocr import convert_scanned_pages
+
+            def on_page(page_number, total_pages):
+                write_status(directory, {
+                    'stage': 'ocr', 'page_count': count,
+                    'message': f'Membaca scan dengan OCR lokal: halaman {page_number} dari {total_pages}.',
+                })
+
+            result = convert_scanned_pages(
+                source, normalized, mode=ocr_mode,
+                language=initial.get('ocr_language', 'eng+ind'), on_page=on_page,
+            )
+            warnings.extend(result['warnings'])
+            write_status(directory, {'ocr_pages': result['pages']})
+            if result['pages']:
+                conversion_source = normalized
         write_status(directory, {
             "stage": "converting", "page_count": count,
             "message": "Menyusun teks, tabel, dan gambar ke DOCX editable.",
             "warnings": [*initial["warnings"], *warnings],
         })
-        convert_editable(source, pending)
+        convert_editable(conversion_source, pending)
         write_status(directory, {"stage": "verifying", "message": "Memverifikasi berkas DOCX hasil konversi."})
         verify_docx(pending)
         os.replace(pending, directory / "result.docx")
@@ -130,11 +150,14 @@ def run_job(job_id: str) -> None:
         })
     except PdfConversionError as exc:
         fail_job(directory, str(exc))
+    except ValueError as exc:
+        fail_job(directory, str(exc))
     except Exception:
         traceback.print_exc()
         fail_job(directory, "Konversi PDF belum berhasil. Coba PDF yang lebih sederhana atau ekspor ulang dari sumber.")
     finally:
         pending.unlink(missing_ok=True)
+        normalized.unlink(missing_ok=True)
 
 
 def main() -> None:

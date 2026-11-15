@@ -26,13 +26,15 @@ import { cn } from '../lib/utils'
 import { fitImage } from '../lib/image-tools'
 import {
   annotationHistory,
-  annotationLocalPoint,
   annotationMatrix,
   createAnnotation,
   drawImageAnnotations,
   EMPTY_ANNOTATION_HISTORY,
   MAX_ANNOTATIONS,
+  resizeAnnotation,
+  rotateAnnotation,
   validateAnnotation,
+  type AnnotationCorner,
   type AnnotationTool,
   type ImageAnnotation,
   type ImagePoint,
@@ -99,7 +101,8 @@ function NumericProperty({
 }
 
 interface DragState {
-  mode: 'create' | 'move' | 'resize'
+  mode: 'create' | 'move' | 'resize' | 'rotate'
+  corner?: AnnotationCorner
   id: string
   start: ImagePoint
   original: ImageAnnotation
@@ -130,7 +133,7 @@ export default function ImageAnnotations({
   const values = draft ?? history.present
   const selected = values.find((value) => value.id === selectedId)
   const preview = fitImage(image.width, image.height, 1600)
-  const handleSize = Math.max(image.width, image.height) / 75
+  const handleSize = Math.max(image.width, image.height) / 45
 
   useEffect(() => {
     changeRef.current(history.present)
@@ -198,8 +201,11 @@ export default function ImageAnnotations({
     if (tool === 'select') {
       setSelectedId(found?.id ?? null)
       if (!found) return
+      const handle = target.closest('[data-handle]')
       drag.current = {
-        mode: target.getAttribute('data-handle') === 'resize' ? 'resize' : 'move',
+        mode:
+          handle?.getAttribute('data-handle') === 'rotate' ? 'rotate' : handle ? 'resize' : 'move',
+        corner: (handle?.getAttribute('data-corner') as AnnotationCorner | null) ?? undefined,
         id: found.id,
         start: position,
         original: found,
@@ -265,14 +271,9 @@ export default function ImageAnnotations({
           x: Math.max(0, Math.min(image.width, current.original.x + position.x - current.start.x)),
           y: Math.max(0, Math.min(image.height, current.original.y + position.y - current.start.y)),
         }
-      else {
-        const local = annotationLocalPoint(current.original, position)
-        updated = {
-          ...current.original,
-          width: Math.max(2, Math.min(32768, Math.abs(local.x) * 2)),
-          height: Math.max(2, Math.min(32768, Math.abs(local.y) * 2)),
-        }
-      }
+      else if (current.mode === 'rotate')
+        updated = rotateAnnotation(current.original, current.start, position, event.shiftKey)
+      else updated = resizeAnnotation(current.original, position, current.corner ?? 'se')
       draftRef.current = current.values.map((value) => (value.id === current.id ? updated : value))
     }
     setDraft(draftRef.current)
@@ -280,11 +281,11 @@ export default function ImageAnnotations({
   function pointerUp(event: PointerEvent<SVGSVGElement>) {
     if (!drag.current) return
     if (draftRef.current) commit(draftRef.current)
-    const kind = drag.current.original.kind
+    const created = drag.current.mode === 'create'
     drag.current = null
     draftRef.current = null
     setDraft(null)
-    if (kind === 'text') setTool('select')
+    if (created) setTool('select')
     if (event.currentTarget.hasPointerCapture(event.pointerId))
       event.currentTarget.releasePointerCapture(event.pointerId)
   }
@@ -471,17 +472,64 @@ export default function ImageAnnotations({
                     strokeDasharray={`${handleSize / 2} ${handleSize / 3}`}
                     pointerEvents="none"
                   />
-                  <rect
-                    data-handle="resize"
-                    x={value.width / 2 - handleSize / 2}
-                    y={value.height / 2 - handleSize / 2}
-                    width={handleSize}
-                    height={handleSize}
-                    fill="#ffffff"
+                  {(['nw', 'ne', 'sw', 'se'] as const).map((corner) => {
+                    const x = ((corner.endsWith('w') ? -1 : 1) * value.width) / 2
+                    const y = ((corner.startsWith('n') ? -1 : 1) * value.height) / 2
+                    return (
+                      <g
+                        key={corner}
+                        data-handle="resize"
+                        data-corner={corner}
+                        aria-label={`Resize sudut ${corner}`}
+                        style={{
+                          cursor:
+                            corner === 'nw' || corner === 'se' ? 'nwse-resize' : 'nesw-resize',
+                        }}
+                      >
+                        <rect
+                          x={x - handleSize}
+                          y={y - handleSize}
+                          width={handleSize * 2}
+                          height={handleSize * 2}
+                          fill="transparent"
+                        />
+                        <rect
+                          x={x - handleSize / 2}
+                          y={y - handleSize / 2}
+                          width={handleSize}
+                          height={handleSize}
+                          fill="#ffffff"
+                          stroke="#23745c"
+                          strokeWidth={Math.max(1, handleSize / 8)}
+                        />
+                      </g>
+                    )
+                  })}
+                  <line
+                    x1={0}
+                    y1={-value.height / 2}
+                    x2={0}
+                    y2={-value.height / 2 - handleSize * 3}
                     stroke="#23745c"
                     strokeWidth={Math.max(1, handleSize / 8)}
-                    style={{ cursor: 'nwse-resize' }}
+                    pointerEvents="none"
                   />
+                  <g data-handle="rotate" aria-label="Putar anotasi" style={{ cursor: 'grab' }}>
+                    <circle
+                      cx={0}
+                      cy={-value.height / 2 - handleSize * 3}
+                      r={handleSize * 1.25}
+                      fill="transparent"
+                    />
+                    <circle
+                      cx={0}
+                      cy={-value.height / 2 - handleSize * 3}
+                      r={handleSize * 0.6}
+                      fill="#ffffff"
+                      stroke="#23745c"
+                      strokeWidth={Math.max(1, handleSize / 8)}
+                    />
+                  </g>
                 </>
               )}
             </g>
@@ -491,7 +539,7 @@ export default function ImageAnnotations({
       <div className="flex flex-wrap justify-between gap-2 text-[10px] leading-5 text-muted-foreground">
         <span>
           {tool === 'select'
-            ? 'Pilih bentuk untuk memindahkan, mengubah ukuran, atau skew.'
+            ? 'Seret sudut untuk resize, handle bulat untuk rotasi. Shift: langkah 15°. Skew tersedia di properti.'
             : tool === 'number' || tool === 'text'
               ? 'Klik pada gambar untuk menambahkan label.'
               : 'Klik dan seret pada gambar untuk menambahkan bentuk.'}

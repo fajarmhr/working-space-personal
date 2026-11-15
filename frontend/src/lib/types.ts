@@ -79,16 +79,6 @@ export interface CaptureStatus {
   download_url: string | null
   busy: boolean
 }
-export interface KeyboardStatus {
-  supported: boolean
-  state: NativeSessionState
-  session_id: string | null
-  applications: string[]
-  line_count: number
-  last_recorded_at: string | null
-  error: string | null
-  download_url: string | null
-}
 export interface CaptureSession {
   id: string
   created_at: string
@@ -96,24 +86,17 @@ export interface CaptureSession {
   state: NativeSessionState
   download_url: string | null
 }
-export interface KeyboardSession {
-  id: string
-  created_at: string
-  applications: string[]
-  line_count: number
-  state: NativeSessionState
-  download_url: string | null
-}
-export interface KeyboardApplication {
-  name: string
-  label: string
-  running: boolean
-}
+export type PdfOcrMode = 'auto' | 'off' | 'force'
+export type PdfOcrLanguage = 'eng+ind' | 'eng' | 'ind'
 export interface PdfJob {
   id: string
   state: 'queued' | 'running' | 'completed' | 'failed'
-  stage: 'queued' | 'validating' | 'converting' | 'verifying' | 'completed' | 'failed'
+  stage: 'queued' | 'validating' | 'ocr' | 'converting' | 'verifying' | 'completed' | 'failed'
   mode: 'editable'
+  ocr_mode: PdfOcrMode
+  ocr_language: PdfOcrLanguage
+  ocr_pages: number[]
+  timeout_seconds: number
   filename: string
   created_at: string
   updated_at: string
@@ -228,12 +211,12 @@ export const toolLabels: Record<ToolId, { title: string; description: string; hi
   },
   'pdf-to-docx': {
     title: 'PDF ke Word',
-    description: 'Konversi PDF menjadi DOCX editable dengan pemulihan layout.',
+    description: 'Ubah PDF digital atau scan menjadi DOCX editable dengan OCR lokal.',
     hint: 'Konversi dokumen',
   },
   'capture-studio': {
     title: 'Capture studio',
-    description: 'Screenshot ke DOCX dan sesi input untuk aplikasi pilihan.',
+    description: 'Tangkap langkah kerja dengan hotkey dan simpan ke satu DOCX.',
     hint: 'Sesi kerja lokal',
   },
 }

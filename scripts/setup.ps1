@@ -34,6 +34,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $toolingPath 'node_modules\pnpm\bin\
 }
 Invoke-RuangNative -Executable 'uv' -Arguments @('python', 'install', '3.14')
 Invoke-RuangNative -Executable 'uv' -Arguments @('sync', '--project', 'backend', '--frozen')
+& (Join-Path $PSScriptRoot 'setup-ocr.ps1')
 $pnpm = Get-RuangPnpm
 Invoke-RuangNative -Executable $node -Arguments @($pnpm, '--dir', 'frontend', 'install', '--frozen-lockfile', '--ignore-scripts')
 $python = Get-RuangPython
