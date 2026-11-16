@@ -12,7 +12,7 @@ import {
   X,
 } from '@phosphor-icons/react'
 import { api } from '../../lib/api'
-import type { CreateTask, DailyTask, TaskPriority } from '../../lib/types'
+import type { CreateTask, DailyTask, SearchTarget, TaskPriority } from '../../lib/types'
 import { cn } from '../../lib/utils'
 import { Button } from '../ui/button'
 import {
@@ -53,7 +53,13 @@ function sortTasks(tasks: DailyTask[]) {
   )
 }
 
-export function DailyTasks({ onActivity }: { onActivity: (action: string) => void }) {
+export function DailyTasks({
+  onActivity,
+  requestedItem,
+}: {
+  onActivity: (action: string) => void
+  requestedItem: SearchTarget | null
+}) {
   const { items: tasks, setItems: setTasks, loading, loadError, retry } = useCollection(api.tasks)
   const [filter, setFilter] = useState<TaskFilter>('all')
   const [query, setQuery] = useState('')
@@ -64,12 +70,16 @@ export function DailyTasks({ onActivity }: { onActivity: (action: string) => voi
   const [priority, setPriority] = useState<TaskPriority>('normal')
   const [dueDate, setDueDate] = useState(workspaceToday)
   const [saving, setSaving] = useState(false)
+  const [openingTarget, setOpeningTarget] = useState(false)
   const [formError, setFormError] = useState('')
   const [mutationError, setMutationError] = useState('')
   const [notice, setNotice] = useState('')
   const [pendingIds, setPendingIds] = useState<number[]>([])
   const [deleting, setDeleting] = useState<DailyTask | null>(null)
   const titleRef = useRef<HTMLInputElement>(null)
+  const openedRequest = useRef<SearchTarget | null>(null)
+  const latestTarget = useRef({ requestedItem, saving })
+  latestTarget.current = { requestedItem, saving }
   const editorPending = editing !== null && pendingIds.includes(editing)
 
   useEffect(() => {
@@ -133,9 +143,59 @@ export function DailyTasks({ onActivity }: { onActivity: (action: string) => voi
     setNotice('')
     focusEditor(titleRef.current)
   }
+  useEffect(() => {
+    if (
+      !requestedItem ||
+      requestedItem.kind !== 'task' ||
+      loading ||
+      loadError ||
+      saving ||
+      pendingIds.length > 0 ||
+      openedRequest.current === requestedItem
+    ) {
+      setOpeningTarget(false)
+      return
+    }
+    let active = true
+    const controller = new AbortController()
+    const isCurrent = () =>
+      active && latestTarget.current.requestedItem === requestedItem && !latestTarget.current.saving
+    setOpeningTarget(true)
+    resetEditor()
+    setFilter('all')
+    setQuery('')
+    setMutationError('')
+    void api
+      .tasks(controller.signal)
+      .then(({ items }) => {
+        if (!isCurrent()) return
+        openedRequest.current = requestedItem
+        setTasks(items)
+        const task = items.find((item) => item.id === requestedItem.id)
+        if (task) editTask(task)
+        else
+          setMutationError(
+            'Tugas dari hasil pencarian tidak ditemukan. Mungkin sudah dihapus; cari ulang data terbaru.',
+          )
+      })
+      .catch((caught) => {
+        if (!isCurrent() || controller.signal.aborted) return
+        openedRequest.current = requestedItem
+        setMutationError(
+          errorMessage(caught, 'Tugas terbaru belum dapat dimuat. Cari ulang untuk mencoba lagi.'),
+        )
+      })
+      .finally(() => {
+        if (isCurrent()) setOpeningTarget(false)
+      })
+    return () => {
+      active = false
+      controller.abort()
+    }
+  }, [requestedItem, loading, loadError, saving, pendingIds.length])
   async function saveTask(event: FormEvent) {
     event.preventDefault()
-    if (saving || editorPending) return
+    if (saving || editorPending || openingTarget) return
     if (!title.trim()) {
       setFormError('Tulis judul tugas terlebih dahulu.')
       return
@@ -210,7 +270,7 @@ export function DailyTasks({ onActivity }: { onActivity: (action: string) => voi
             <p className="font-mono text-[28px] tracking-tight text-primary">{counts.completed}</p>
           </div>
         </div>
-        <Button variant="secondary" onClick={newTask} disabled={saving}>
+        <Button variant="secondary" onClick={newTask} disabled={saving || openingTarget}>
           <Plus size={17} />
           Tugas baru
         </Button>
@@ -298,7 +358,7 @@ export function DailyTasks({ onActivity }: { onActivity: (action: string) => voi
                       <button
                         type="button"
                         onClick={() => editTask(task)}
-                        disabled={pending || saving}
+                        disabled={pending || saving || openingTarget}
                         className={cn(
                           'block w-full break-words text-left text-[13px] leading-6 font-medium hover:text-primary',
                           task.completed && 'text-muted-foreground line-through',
@@ -342,7 +402,7 @@ export function DailyTasks({ onActivity }: { onActivity: (action: string) => voi
                         variant="ghost"
                         size="sm"
                         className="size-8 px-0"
-                        disabled={pending || saving}
+                        disabled={pending || saving || openingTarget}
                         onClick={() => editTask(task)}
                         aria-label={`Edit tugas: ${task.title}`}
                       >
@@ -352,7 +412,7 @@ export function DailyTasks({ onActivity }: { onActivity: (action: string) => voi
                         variant="ghost"
                         size="sm"
                         className="size-8 px-0 hover:text-danger"
-                        disabled={pending || saving}
+                        disabled={pending || saving || openingTarget}
                         onClick={() => setDeleting(task)}
                         aria-label={`Hapus tugas: ${task.title}`}
                       >
@@ -373,7 +433,7 @@ export function DailyTasks({ onActivity }: { onActivity: (action: string) => voi
               }
             >
               {!tasks.length && (
-                <Button variant="secondary" size="sm" onClick={newTask}>
+                <Button variant="secondary" size="sm" onClick={newTask} disabled={openingTarget}>
                   <Plus size={15} />
                   Tulis tugas pertama
                 </Button>
@@ -400,7 +460,7 @@ export function DailyTasks({ onActivity }: { onActivity: (action: string) => voi
               <Button
                 variant="ghost"
                 size="icon"
-                disabled={saving}
+                disabled={saving || openingTarget}
                 onClick={resetEditor}
                 aria-label="Batal edit tugas"
               >
@@ -408,7 +468,15 @@ export function DailyTasks({ onActivity }: { onActivity: (action: string) => voi
               </Button>
             )}
           </div>
-          <fieldset disabled={saving || editorPending} className="min-w-0 space-y-5">
+          {openingTarget && (
+            <p role="status" className="mb-4 text-xs text-muted-foreground">
+              Memuat tugas terbaru…
+            </p>
+          )}
+          <fieldset
+            disabled={saving || editorPending || openingTarget}
+            className="min-w-0 space-y-5"
+          >
             <div className="flex flex-col gap-2">
               <label htmlFor="task-title" className="field-label">
                 Judul tugas

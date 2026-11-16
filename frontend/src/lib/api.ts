@@ -11,10 +11,13 @@ import type {
   PdfOcrMode,
   PdfOcrLanguage,
   Preferences,
+  SearchResults,
   Snippet,
   ToolId,
   UpdateTask,
 } from './types'
+import type { HuaweiInspection, HuaweiOptions, HuaweiPackage } from './huawei-lld'
+import type { ReportingConfig, ReportingDraftResponse } from './huawei-reporting'
 
 let csrfToken = ''
 
@@ -33,7 +36,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
         ...options.headers,
       },
     })
-  } catch {
+  } catch (error) {
+    if (options.signal?.aborted) throw error
     throw new Error(
       'Server lokal belum tersambung. Pastikan Ruang sedang berjalan, lalu coba lagi.',
     )
@@ -55,6 +59,55 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
+  search: (query: string, signal?: AbortSignal) =>
+    request<SearchResults>(`/search?q=${encodeURIComponent(query)}`, { signal }),
+  reportDraft: () => request<ReportingDraftResponse>('/huawei/reporting/draft'),
+  saveReportDraft: (config: ReportingConfig, revision: number) =>
+    request<ReportingDraftResponse>('/huawei/reporting/draft', {
+      method: 'PUT',
+      body: JSON.stringify({ config, revision }),
+    }),
+  huaweiInspect: (file: File) => {
+    const data = new FormData()
+    data.append('file', file)
+    return request<HuaweiInspection>('/huawei/inspect', { method: 'POST', body: data })
+  },
+  huaweiGenerate: (file: File, options: HuaweiOptions) => {
+    const data = new FormData()
+    data.append('file', file)
+    data.append('options', JSON.stringify(options))
+    return request<HuaweiPackage>('/huawei/generate', { method: 'POST', body: data })
+  },
+  huaweiDownload: async (file: File, options: HuaweiOptions): Promise<Blob> => {
+    const data = new FormData()
+    data.append('file', file)
+    data.append('options', JSON.stringify(options))
+    let response: Response
+    try {
+      response = await fetch('/api/huawei/download', {
+        method: 'POST',
+        body: data,
+        credentials: 'same-origin',
+        headers: { 'X-CSRFToken': csrfToken },
+      })
+    } catch {
+      throw new Error('Server lokal belum tersambung. Pastikan Ruang sedang berjalan.')
+    }
+    if (!response.ok) {
+      let message = `Unduhan gagal (${response.status}). Coba lagi.`
+      try {
+        const error = (await response.json()) as { detail?: string }
+        if (typeof error.detail === 'string') message = error.detail
+      } catch {
+        /* Keep the HTTP error when a response has no JSON body. */
+      }
+      throw new Error(message)
+    }
+    const blob = await response.blob()
+    if (blob.size === 0 || !response.headers.get('content-type')?.includes('application/zip'))
+      throw new Error('Server belum mengirim paket ZIP yang valid. Coba unduh lagi.')
+    return blob
+  },
   async bootstrap() {
     const data = await request<Bootstrap>('/bootstrap')
     csrfToken = data.csrf_token
@@ -91,13 +144,13 @@ export const api = {
   captureTake: () => request<CaptureStatus>('/capture/take', { method: 'POST' }),
   captureStop: () => request<CaptureStatus>('/capture/stop', { method: 'POST' }),
   captureSessions: () => request<{ items: CaptureSession[] }>('/capture/sessions'),
-  tasks: () => request<{ items: DailyTask[] }>('/tasks'),
+  tasks: (signal?: AbortSignal) => request<{ items: DailyTask[] }>('/tasks', { signal }),
   createTask: (values: CreateTask) =>
     request<DailyTask>('/tasks', { method: 'POST', body: JSON.stringify(values) }),
   updateTask: (id: number, values: UpdateTask) =>
     request<DailyTask>(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(values) }),
   deleteTask: (id: number) => request<{ deleted: number }>(`/tasks/${id}`, { method: 'DELETE' }),
-  snippets: () => request<{ items: Snippet[] }>('/snippets'),
+  snippets: (signal?: AbortSignal) => request<{ items: Snippet[] }>('/snippets', { signal }),
   createSnippet: (values: CreateSnippet) =>
     request<Snippet>('/snippets', { method: 'POST', body: JSON.stringify(values) }),
   updateSnippet: (id: number, values: Partial<CreateSnippet>) =>

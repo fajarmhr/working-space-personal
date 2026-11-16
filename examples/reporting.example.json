@@ -1,0 +1,45 @@
+{
+  "enabled": false,
+  "name": "UPF KPI Monitoring",
+  "profile_id": "personal",
+  "source": {
+    "base_url": "",
+    "page_path": "",
+    "browser_profile_id": "u2020-personal",
+    "export_format": "csv",
+    "selectors_confirmed": false
+  },
+  "dataset": {
+    "timestamp_column": "",
+    "entity_column": "",
+    "timezone": "Asia/Makassar",
+    "metrics": []
+  },
+  "schedule": {
+    "timezone": "Asia/Makassar",
+    "interval_minutes": 60,
+    "lookback_minutes": 60,
+    "delay_minutes": 10,
+    "start_at": null,
+    "end_at": null
+  },
+  "delivery_profiles": [
+    {
+      "id": "personal",
+      "label": "Personal",
+      "email": {
+        "enabled": false,
+        "to": [],
+        "subject_template": "{report_name} — {window_end}",
+        "body_template": "Periode {window_start} sampai {window_end}.\n{summary}",
+        "smtp_secret_ref": ""
+      },
+      "telegram": {
+        "enabled": false,
+        "chat_id": "",
+        "bot_token_secret_ref": "",
+        "caption_template": "{report_name}\n{window_start} – {window_end}\n{summary}"
+      }
+    }
+  ]
+}

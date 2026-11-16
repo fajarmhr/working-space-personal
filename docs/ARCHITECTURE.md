@@ -10,7 +10,27 @@ Satu repository berisi frontend React/TypeScript dan backend Django. Frontend ti
 
 Registry eksplisit di `backend/workspace/registry.py` berisi ID, kategori, nama, deskripsi, dan lokasi eksekusi tools. Penambahan tools dilakukan lewat kode yang ditinjau, bukan memuat plugin atau kode pihak ketiga secara dinamis.
 
+### Huawei workspace opsional
+
+Preferensi `huawei_enabled` dan `active_workspace` mengaktifkan pengelompokan alat Huawei di shell. Ini tetap satu profil lokal. Constraint database dan service mencegah workspace Huawei aktif ketika dinonaktifkan. Alat personal tidak dihapus saat berpindah workspace.
+
+`huawei_api.py` menyediakan multipart `POST /api/huawei/inspect`, `/generate`, serta `/download`. Seluruh endpoint mengikuti loopback/CSRF yang sama dan hanya menerima penggunaan saat workspace diaktifkan. Input `.xlsx` dibatasi 10 MB; engine memeriksa struktur arsip, XML, merged cells, parameter, dan relasi antar-sheet sebelum merender MML secara deterministik. Tidak ada perintah jaringan yang dijalankan aplikasi.
+
+LLD, password, preview, dan ZIP diproses per request; aplikasi tidak menyimpannya ke database atau direktori output. Django dapat menggunakan temporary upload file sesuai batas memori upload, yang dibersihkan setelah request selesai. ZIP memuat dua script, panduan tahap, dan manifest SHA-256. Riwayat aktivitas hanya merekam tindakan generik dari panel, bukan isi script atau kredensial.
+
 Tools ringan berjalan di browser: perbandingan teks, CSV/JSON, pengolah teks, generator, checksum, dan editor gambar. Backend menyimpan catatan, tugas harian, pustaka snippet, preferensi, favorit, serta metadata aktivitas; PDF dan Capture Studio menggunakan service backend lokal. Model tugas dan snippet memiliki migrasi tersendiri; koleksinya diambil saat panel dibuka, bukan dibawa dalam bootstrap workspace.
+
+## Pencarian global
+
+`GET /api/search?q=...` mencari teks tersimpan pada quick note, task, dan snippet secara Unicode casefold. Query dibatasi 200 karakter; query kurang dari dua karakter mengembalikan hasil kosong. Koleksi yang dibatasi 1.000 task dan 500 snippet dibaca bertahap dengan field yang diperlukan; maksimal 10 hasil per koleksi, ditambah quick note, disertai `has_more`. Cuplikan adalah teks biasa. Isi tidak digandakan ke indeks atau bootstrap. Dialog global memakai debounce serta membatalkan hasil request lama. Link item tugas/snippet mengandung ID dan membuka item tersebut langsung, termasuk ketika filter daftar sebelumnya menyembunyikannya.
+
+Pembukaan hasil tugas/snippet menunggu penyimpanan yang sedang berlangsung dan memuat ulang koleksi sebelum membuka editor. Hasil request yang targetnya sudah berubah dibuang. Ini mencegah penyelesaian save lama menghapus editor item baru, serta mencegah hasil pencarian terbaru membuka salinan record yang kedaluwarsa dari tab lain.
+
+## Kerangka reporting Huawei
+
+`workspace/reporting/` memisahkan kontrak pengambilan U2020, normalisasi KPI, rendering grafik, pengiriman per kanal, dan perencanaan jadwal. Saat ini tidak ada adapter eksternal aktif atau job reporting yang didaftarkan. `enabled` selalu false, dan readiness membedakan bagian yang belum dikonfigurasi dari bagian yang baru berupa kerangka.
+
+`GET/PUT /api/huawei/reporting/draft` menyimpan satu draft JSON yang tervalidasi pada SQLite, dengan revision untuk mencegah penimpaan dari tab lain. Pengaturan tetap mengikuti profil lokal; delivery profiles adalah tujuan konfigurasi, bukan akun multiuser atau batas otorisasi. Draft berisi referensi secret, tanpa token/password. Draft otomatis ikut backup database. Rencana schedule dan jendela data hanyalah preview, bukan automasi yang telah diaktifkan. Lihat `docs/HUAWEI_REPORTING.md` untuk kebutuhan integrasi dan pengujian di komputer monitoring.
 
 ## Alur request
 

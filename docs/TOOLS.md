@@ -1,6 +1,6 @@
 # Tools harian Ruang
 
-Semua 17 tools berjalan lokal. Catatan, tugas, snippet, preferensi, favorit, dan nama aksi penggunaan disimpan oleh Django. Perbandingan teks, CSV/JSON, checksum, gambar, dan hasil generator tetap di browser. PDF diproses backend lokal; Capture Studio menyimpan hasil sesi di `data/outputs/`.
+Semua 17 tools personal berjalan lokal, ditambah LLD Script Builder dan kerangka KPI Reporting Studio pada Huawei workspace opsional. Catatan, tugas, snippet, preferensi, favorit, dan nama aksi penggunaan disimpan oleh Django. Perbandingan teks, CSV/JSON, checksum, gambar, dan hasil generator browser tetap di browser. PDF dan LLD diproses backend lokal; Capture Studio menyimpan hasil sesi di `data/outputs/`.
 
 | Tool               | Kegunaan                            | Batas dan perilaku                                                                                                           |
 | ------------------ | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -21,6 +21,12 @@ Semua 17 tools berjalan lokal. Catatan, tugas, snippet, preferensi, favorit, dan
 | Olah gambar        | Resize, format, anotasi, blur        | JPG/PNG/WebP maksimal 20 MB/40 MP; hasil maksimal 20 MP dan sisi 8.192 piksel; maksimal 100 anotasi.                          |
 | PDF ke Word        | PDF ke DOCX editable + OCR          | Maksimal 25 MB/100 halaman, satu pekerjaan aktif, batas proses 5 menit. PDF bersandi ditolak.                               |
 | Capture Studio     | Screenshot ke DOCX                 | Windows, sesi manual. Maksimal 200 screenshot per sesi, 40 MP per gambar/256 MB PNG total.                                |
+| LLD Script Builder | XLSX ke dua script initial UPF | Huawei workspace opsional; maksimal 10 MB, dua sheet sesuai template. Nama interface manual, ekspor TXT/INI/ZIP, preview empat tahap dan kebutuhan baseline/cleanup yang belum lengkap. |
+| KPI Reporting Studio | Draft pipeline monitoring U2020 | Belum aktif; simpan draft sumber KPI, schedule, email/Telegram per profil, referensi secret, dan checklist integrasi. Tidak melakukan login, render grafik, menjadwalkan, atau mengirim pesan. |
+
+## Pencarian global
+
+`Ctrl+K` atau tombol Cari global mencari alat dan isi data tersimpan. Minimal dua karakter dan maksimal 200 karakter. Pencarian mencakup quick note, judul/detail semua tugas (termasuk selesai), serta judul/isi/kategori snippet di kedua workspace. Maksimal 10 hasil tugas dan 10 snippet, ditambah quick note; perjelas query bila masih ada hasil lain. Hasil tugas/snippet membuka editor item yang sesuai langsung. Query dan cuplikan tidak disimpan sebagai aktivitas.
 
 ## Bandingkan teks
 

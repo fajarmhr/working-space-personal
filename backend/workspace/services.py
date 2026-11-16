@@ -34,6 +34,10 @@ def save_preferences(changes: dict) -> WorkspacePreferences:
         if value is None:
             raise HttpError(422, f"{field} tidak boleh kosong.")
         setattr(current, field, value.strip() if isinstance(value, str) else value)
+    if not current.huawei_enabled:
+        if changes.get("active_workspace") == "huawei":
+            raise HttpError(422, "Aktifkan Huawei workspace terlebih dahulu.")
+        current.active_workspace = "personal"
     current.save()
     return current
 

@@ -11,7 +11,7 @@ import {
   X,
 } from '@phosphor-icons/react'
 import { api } from '../../lib/api'
-import type { CreateSnippet, Snippet } from '../../lib/types'
+import type { CreateSnippet, SearchTarget, Snippet } from '../../lib/types'
 import { cn, copyText, formatDate } from '../../lib/utils'
 import { Button } from '../ui/button'
 import {
@@ -25,7 +25,13 @@ import {
   useCollection,
 } from './shared'
 
-export function Snippets({ onActivity }: { onActivity: (action: string) => void }) {
+export function Snippets({
+  onActivity,
+  requestedItem,
+}: {
+  onActivity: (action: string) => void
+  requestedItem: SearchTarget | null
+}) {
   const { items, setItems, loading, loadError, retry } = useCollection(api.snippets)
   const [query, setQuery] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
@@ -34,12 +40,16 @@ export function Snippets({ onActivity }: { onActivity: (action: string) => void 
   const [content, setContent] = useState('')
   const [category, setCategory] = useState('Umum')
   const [saving, setSaving] = useState(false)
+  const [openingTarget, setOpeningTarget] = useState(false)
   const [formError, setFormError] = useState('')
   const [copyError, setCopyError] = useState('')
   const [copied, setCopied] = useState<number | null>(null)
   const [notice, setNotice] = useState('')
   const [deleting, setDeleting] = useState<Snippet | null>(null)
   const titleRef = useRef<HTMLInputElement>(null)
+  const openedRequest = useRef<SearchTarget | null>(null)
+  const latestTarget = useRef({ requestedItem, saving })
+  latestTarget.current = { requestedItem, saving }
   const copiedTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   useEffect(() => () => clearTimeout(copiedTimeout.current), [])
 
@@ -88,8 +98,60 @@ export function Snippets({ onActivity }: { onActivity: (action: string) => void 
     setNotice('')
     focusEditor(titleRef.current)
   }
+  useEffect(() => {
+    if (
+      !requestedItem ||
+      requestedItem.kind !== 'snippet' ||
+      loading ||
+      loadError ||
+      saving ||
+      openedRequest.current === requestedItem
+    ) {
+      setOpeningTarget(false)
+      return
+    }
+    let active = true
+    const controller = new AbortController()
+    const isCurrent = () =>
+      active && latestTarget.current.requestedItem === requestedItem && !latestTarget.current.saving
+    setOpeningTarget(true)
+    resetEditor()
+    setCategoryFilter('')
+    setQuery('')
+    void api
+      .snippets(controller.signal)
+      .then(({ items: current }) => {
+        if (!isCurrent()) return
+        openedRequest.current = requestedItem
+        setItems(current)
+        const item = current.find((candidate) => candidate.id === requestedItem.id)
+        if (item) editSnippet(item)
+        else
+          setFormError(
+            'Snippet dari hasil pencarian tidak ditemukan. Mungkin sudah dihapus; cari ulang data terbaru.',
+          )
+      })
+      .catch((caught) => {
+        if (!isCurrent() || controller.signal.aborted) return
+        openedRequest.current = requestedItem
+        setFormError(
+          errorMessage(
+            caught,
+            'Snippet terbaru belum dapat dimuat. Cari ulang untuk mencoba lagi.',
+          ),
+        )
+      })
+      .finally(() => {
+        if (isCurrent()) setOpeningTarget(false)
+      })
+    return () => {
+      active = false
+      controller.abort()
+    }
+  }, [requestedItem, loading, loadError, saving])
   async function saveSnippet(event: FormEvent) {
     event.preventDefault()
+    if (saving || openingTarget) return
     if (!title.trim()) {
       setFormError('Tulis judul snippet terlebih dahulu.')
       return
@@ -169,7 +231,7 @@ export function Snippets({ onActivity }: { onActivity: (action: string) => void 
             </p>
           </div>
         </div>
-        <Button variant="secondary" disabled={saving} onClick={newSnippet}>
+        <Button variant="secondary" disabled={saving || openingTarget} onClick={newSnippet}>
           <Plus size={17} />
           Snippet baru
         </Button>
@@ -231,7 +293,7 @@ export function Snippets({ onActivity }: { onActivity: (action: string) => void 
                     <button
                       type="button"
                       className="min-w-0 flex-1 break-words text-left text-[13px] leading-6 font-medium hover:text-primary"
-                      disabled={saving}
+                      disabled={saving || openingTarget}
                       onClick={() => editSnippet(item)}
                     >
                       {item.title}
@@ -241,7 +303,7 @@ export function Snippets({ onActivity }: { onActivity: (action: string) => void 
                         variant="ghost"
                         size="sm"
                         className="size-8 px-0"
-                        disabled={saving}
+                        disabled={saving || openingTarget}
                         onClick={() => editSnippet(item)}
                         aria-label={`Edit snippet: ${item.title}`}
                       >
@@ -251,7 +313,7 @@ export function Snippets({ onActivity }: { onActivity: (action: string) => void 
                         variant="ghost"
                         size="sm"
                         className="size-8 px-0 hover:text-danger"
-                        disabled={saving}
+                        disabled={saving || openingTarget}
                         onClick={() => setDeleting(item)}
                         aria-label={`Hapus snippet: ${item.title}`}
                       >
@@ -292,7 +354,7 @@ export function Snippets({ onActivity }: { onActivity: (action: string) => void 
               }
             >
               {!items.length && (
-                <Button variant="secondary" size="sm" onClick={newSnippet}>
+                <Button variant="secondary" size="sm" onClick={newSnippet} disabled={openingTarget}>
                   <Plus size={15} />
                   Tulis snippet pertama
                 </Button>
@@ -316,7 +378,7 @@ export function Snippets({ onActivity }: { onActivity: (action: string) => void 
               <Button
                 variant="ghost"
                 size="icon"
-                disabled={saving}
+                disabled={saving || openingTarget}
                 onClick={resetEditor}
                 aria-label="Batal edit snippet"
               >
@@ -324,7 +386,12 @@ export function Snippets({ onActivity }: { onActivity: (action: string) => void 
               </Button>
             )}
           </div>
-          <fieldset disabled={saving} className="min-w-0 space-y-5">
+          {openingTarget && (
+            <p role="status" className="mb-4 text-xs text-muted-foreground">
+              Memuat snippet terbaru…
+            </p>
+          )}
+          <fieldset disabled={saving || openingTarget} className="min-w-0 space-y-5">
             <div className="flex flex-col gap-2">
               <label htmlFor="snippet-title" className="field-label">
                 Judul snippet

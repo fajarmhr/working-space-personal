@@ -19,6 +19,8 @@ class PreferencesOut(Schema):
     display_name: str
     focus_minutes: int
     break_minutes: int
+    huawei_enabled: bool
+    active_workspace: Literal["personal", "huawei"]
 
 
 class InputSchema(Schema):
@@ -30,6 +32,8 @@ class PreferencesPatch(InputSchema):
     display_name: str | None = Field(default=None, max_length=60)
     focus_minutes: int | None = Field(default=None, ge=1, le=180, strict=True)
     break_minutes: int | None = Field(default=None, ge=1, le=60, strict=True)
+    huawei_enabled: bool | None = Field(default=None, strict=True)
+    active_workspace: Literal["personal", "huawei"] | None = None
 
 
 class NoteOut(Schema):

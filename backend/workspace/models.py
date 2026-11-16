@@ -9,6 +9,8 @@ class WorkspacePreferences(models.Model):
     display_name = models.CharField(max_length=60, blank=True, default="")
     focus_minutes = models.PositiveSmallIntegerField(default=25)
     break_minutes = models.PositiveSmallIntegerField(default=5)
+    huawei_enabled = models.BooleanField(default=False)
+    active_workspace = models.CharField(max_length=10, default="personal")
 
     class Meta:
         constraints = [
@@ -24,6 +26,14 @@ class WorkspacePreferences(models.Model):
             models.CheckConstraint(
                 condition=models.Q(break_minutes__gte=1, break_minutes__lte=60),
                 name="valid_break_duration",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(active_workspace__in=["personal", "huawei"]),
+                name="valid_active_workspace",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(huawei_enabled=True) | models.Q(active_workspace="personal"),
+                name="active_huawei_requires_enabled",
             ),
         ]
 
@@ -86,5 +96,19 @@ class Snippet(models.Model):
             models.CheckConstraint(condition=~models.Q(title=""), name="snippet_title_not_empty"),
             models.CheckConstraint(condition=~models.Q(content=""), name="snippet_content_not_empty"),
             models.CheckConstraint(condition=~models.Q(category=""), name="snippet_category_not_empty"),
+        ]
+
+
+class HuaweiReportingDraft(models.Model):
+    """One inactive reporting draft for this local installation, without secrets."""
+
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    config = models.JSONField(default=dict)
+    revision = models.PositiveIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=models.Q(id=1), name="single_huawei_reporting_draft"),
         ]
 

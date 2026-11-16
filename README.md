@@ -42,6 +42,20 @@ Setup membutuhkan internet dan [uv](https://docs.astral.sh/uv/getting-started/in
 
 Workspace menyediakan 17 tools, pencarian alat, favorit, riwayat aktivitas, tema terang/gelap/sistem, dan nama tampilan. Tugas harian dapat dibuka langsung dari sidebar. Detail batas dan cara kerja ada di [docs/TOOLS.md](docs/TOOLS.md).
 
+**Pencarian global:** tekan `Ctrl+K` untuk mencari alat serta isi catatan, judul/detail tugas (termasuk yang selesai), dan judul/isi/kategori snippet yang tersimpan. Minimal dua karakter untuk pencarian isi. Hasil konten dapat dibuka langsung ke catatan atau item tugas/snippet yang sesuai. Pencarian tidak mencakup isi berkas hasil konversi.
+
+## Huawei workspace (opsional)
+
+Aktifkan **Huawei personal** di Pengaturan, simpan, lalu pilih workspace Huawei di sidebar. Workspace ini mengelompokkan alat kerja UPF dan menyediakan **LLD Script Builder**. Catatan, tugas, snippet, serta favorit tetap menggunakan profil lokal yang sama.
+
+Unggah LLD `.xlsx` dengan struktur sheet `5G Core Service IP Design` dan `Routing`, pilih node, isi nama interface serta parameter yang diperlukan, kemudian tinjau hasilnya. Builder menghasilkan dua script berurutan: **Static Routing + BFD**, lalu **BGP over Static Routing + BFD**. Masing-masing memiliki preparation, execution, verification, dan rollback. Pilih `.txt` atau `.ini`; keduanya berisi teks MML sesuai template, bukan format konfigurasi INI key-value. Unduh masing-masing atau paket ZIP dengan manifest checksum.
+
+Generator ditujukan untuk konfigurasi **initial** UPF. Periksa kondisi awal dan jalankan satu bagian per tahap. Rollback dilakukan dari script BGP, lalu Static/BFD. Status global/port yang belum diketahui dan perintah cleanup BGP yang belum tercakup template ditampilkan sebagai langkah yang perlu dilengkapi. Baca [batas template](docs/HUAWEI_TEMPLATE.md).
+
+LLD dan parameter diproses oleh backend lokal tanpa disimpan sebagai riwayat atau output permanen aplikasi. Password BGP ada di hasil script yang diunduh; simpan berkas tersebut sesuai kebutuhan kerjamu.
+
+**KPI Reporting Studio** menyediakan kerangka reporting U2020: simpan draft sumber data, pemetaan KPI, rencana interval, serta profil tujuan email/Telegram. Draft selalu nonaktif. Login, navigasi U2020, ekspor, pembuatan grafik, scheduler, serta pengiriman nyata belum terhubung. Token/password tidak diterima dalam draft; gunakan nama referensi secret. Detail desain, batas pengujian, serta informasi yang perlu dilengkapi ada di [docs/HUAWEI_REPORTING.md](docs/HUAWEI_REPORTING.md).
+
 Untuk screenshot, buka Capture Studio lalu mulai sesi. Default **Ctrl+Shift+S**, alternatif **Ctrl+Alt+S**; setiap tangkapan layar utama ditambahkan ke DOCX dan disimpan otomatis. Sesi tetap berjalan saat berpindah tool atau menutup tab sampai dihentikan, atau backend berhenti.
 
 PDF ke Word menggunakan OCR otomatis untuk scan, dengan pilihan bahasa serta opsi membaca ulang seluruh halaman. Engine Tesseract bawaan PyMuPDF memakai model `tessdata_best` Indonesia/Inggris secara offline. Setup mengunduh model dari commit resmi yang dikunci dan memeriksa SHA-256. Untuk memasang ulang model saja, jalankan `powershell -ExecutionPolicy Bypass -File scripts/setup-ocr.ps1`. OCR mendekati font dan posisi sumber; periksa kembali angka, ejaan, tabel kompleks, dan scan yang buram.

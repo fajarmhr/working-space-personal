@@ -115,6 +115,16 @@ TOOLS = (
         "description": "Tangkap langkah kerja dengan hotkey dan simpan ke satu DOCX.",
         "category": "productivity", "execution": "hybrid",
     },
+    {
+        "id": "huawei-lld", "title": "LLD Script Builder",
+        "description": "Buat paket script Huawei dari LLD XLSX dan template kerja.",
+        "category": "developer", "execution": "hybrid",
+    },
+    {
+        "id": "huawei-reporting", "title": "KPI Reporting Studio",
+        "description": "Susun draft monitoring U2020, grafik KPI, email, dan Telegram.",
+        "category": "productivity", "execution": "hybrid",
+    },
 )
 TOOL_IDS = frozenset(tool["id"] for tool in TOOLS)
 DEFAULT_FAVORITES = frozenset({"json-formatter", "focus-timer"})

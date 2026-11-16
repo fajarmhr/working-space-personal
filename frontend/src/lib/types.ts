@@ -1,4 +1,5 @@
 export type Theme = 'light' | 'dark' | 'system'
+export type WorkspaceId = 'personal' | 'huawei'
 export type Category = 'developer' | 'writing' | 'productivity' | 'security' | 'files'
 export type ToolId =
   | 'json-formatter'
@@ -18,6 +19,8 @@ export type ToolId =
   | 'image-tools'
   | 'pdf-to-docx'
   | 'capture-studio'
+  | 'huawei-lld'
+  | 'huawei-reporting'
 
 export interface Tool {
   id: ToolId
@@ -33,6 +36,8 @@ export interface Preferences {
   display_name: string
   focus_minutes: number
   break_minutes: number
+  huawei_enabled: boolean
+  active_workspace: WorkspaceId
 }
 
 export interface Note {
@@ -55,6 +60,23 @@ export interface DailyTask {
 
 export type CreateTask = Pick<DailyTask, 'title' | 'details' | 'priority' | 'due_date'>
 export type UpdateTask = Partial<CreateTask & Pick<DailyTask, 'completed'>>
+
+export interface SearchItem {
+  kind: 'note' | 'task' | 'snippet'
+  id: number
+  title: string
+  excerpt: string
+  updated_at: string | null
+  completed?: boolean | null
+}
+
+export interface SearchResults {
+  query: string
+  items: SearchItem[]
+  has_more: boolean
+}
+
+export type SearchTarget = Pick<SearchItem, 'kind' | 'id'>
 
 export interface Snippet {
   id: number
@@ -218,5 +240,15 @@ export const toolLabels: Record<ToolId, { title: string; description: string; hi
     title: 'Capture studio',
     description: 'Tangkap langkah kerja dengan hotkey dan simpan ke satu DOCX.',
     hint: 'Sesi kerja lokal',
+  },
+  'huawei-lld': {
+    title: 'LLD Script Builder',
+    description: 'Ubah LLD XLSX menjadi paket script sesuai template kerja Huawei.',
+    hint: 'Preparation hingga rollback',
+  },
+  'huawei-reporting': {
+    title: 'KPI Reporting',
+    description: 'Siapkan alur monitoring U2020, grafik KPI, email, dan Telegram.',
+    hint: 'Rencana monitoring',
   },
 }
