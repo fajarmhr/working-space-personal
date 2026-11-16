@@ -111,6 +111,11 @@ TOOLS = (
         "category": "files", "execution": "hybrid",
     },
     {
+        "id": "pdf-to-images", "title": "PDF ke Gambar",
+        "description": "Ekspor halaman PDF ke gambar resolusi tinggi, susun halaman, dan edit hasilnya.",
+        "category": "files", "execution": "hybrid",
+    },
+    {
         "id": "capture-studio", "title": "Capture Studio",
         "description": "Tangkap langkah kerja dengan hotkey dan simpan ke satu DOCX.",
         "category": "productivity", "execution": "hybrid",

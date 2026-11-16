@@ -1,6 +1,6 @@
 # Tools harian Ruang
 
-Semua 17 tools personal berjalan lokal, ditambah LLD Script Builder dan kerangka KPI Reporting Studio pada Huawei workspace opsional. Catatan, tugas, snippet, preferensi, favorit, dan nama aksi penggunaan disimpan oleh Django. Perbandingan teks, CSV/JSON, checksum, gambar, dan hasil generator browser tetap di browser. PDF dan LLD diproses backend lokal; Capture Studio menyimpan hasil sesi di `data/outputs/`.
+Semua 18 tools personal berjalan lokal, ditambah LLD Script Builder dan kerangka KPI Reporting Studio pada Huawei workspace opsional. Catatan, tugas, snippet, preferensi, favorit, dan nama aksi penggunaan disimpan oleh Django. Perbandingan teks, CSV/JSON, checksum, gambar, dan hasil generator browser tetap di browser. PDF dan LLD diproses backend lokal; Capture Studio serta PDF ke Gambar menyimpan berkas di `data/outputs/`.
 
 | Tool               | Kegunaan                            | Batas dan perilaku                                                                                                           |
 | ------------------ | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -20,6 +20,7 @@ Semua 17 tools personal berjalan lokal, ditambah LLD Script Builder dan kerangka
 | Checksum berkas    | SHA-256 dan pencocokan              | Maksimal 50 MB; berkas tidak diunggah ke server.                                                                             |
 | Olah gambar        | Resize, format, anotasi, blur        | JPG/PNG/WebP maksimal 20 MB/40 MP; hasil maksimal 20 MP dan sisi 8.192 piksel; maksimal 100 anotasi.                          |
 | PDF ke Word        | PDF ke DOCX editable + OCR          | Maksimal 25 MB/100 halaman, satu pekerjaan aktif, batas proses 5 menit. PDF bersandi ditolak.                               |
+| PDF ke Gambar      | Gambar resolusi tinggi dan editor halaman | PDF 25 MB/100 halaman; 150/300/600 DPI, PNG/JPEG/WebP/TIFF, 40 MP dan sisi 8.192 px per halaman. Tambah/hapus/susun/edit, undo/redo, ekspor satuan/ZIP. |
 | Capture Studio     | Screenshot ke DOCX                 | Windows, sesi manual. Maksimal 200 screenshot per sesi, 40 MP per gambar/256 MB PNG total.                                |
 | LLD Script Builder | XLSX ke dua script initial UPF | Huawei workspace opsional; maksimal 10 MB, dua sheet sesuai template. Nama interface manual, ekspor TXT/INI/ZIP, preview empat tahap dan kebutuhan baseline/cleanup yang belum lengkap. |
 | KPI Reporting Studio | Draft pipeline monitoring U2020 | Belum aktif; simpan draft sumber KPI, schedule, email/Telegram per profil, referensi secret, dan checklist integrasi. Tidak melakukan login, render grafik, menjadwalkan, atau mengirim pesan. |
@@ -45,6 +46,12 @@ Proteksi formula spreadsheet aktif secara default ketika mengekspor CSV. Nilai y
 Format sumber diperiksa dari header berkas dan dimensinya dibatasi sebelum decode. SVG tidak diterima. Ekspor melalui canvas menghapus metadata sumber dan menghasilkan gambar diam. JPEG mengisi area transparan dengan putih. Kualitas hanya berlaku pada JPEG/WebP; PNG tidak memakai pengaturan kualitas lossy. Ukuran berkas hasil tidak selalu lebih kecil.
 
 Anotasi tersedia sebagai kotak, bulat/elips, panah, nomor, tulisan, dan area blur. Setelah menggambar, mode Pilih aktif otomatis. Seret objek untuk memindahkan, handle sudut untuk resize, dan handle putar untuk rotasi. Tahan Shift saat memutar untuk langkah 15°. Panel properti menyediakan ukuran, warna/garis, rotasi, serta skew horizontal/vertikal (maksimal ±45°); undo/redo dan hapus tersedia. Tulisan maksimal 1.000 karakter dan nomor 1–999. Anotasi mengikuti ukuran gambar saat resize dan digabung ke piksel saat ekspor. Proyek anotasi tidak disimpan otomatis; simpan gambar hasil sebelum menutup panel.
+
+## PDF ke Gambar
+
+Pilih 150, 300, atau 600 DPI sebelum impor. Render PDF dan ekspor berjalan di backend lokal, sedangkan editor memakai anotasi gambar yang sudah ada (kotak, bulat, panah, nomor, tulisan, blur, rotasi/skew anotasi). Output editor mempertahankan ukuran halaman asli hingga 40 MP dan menyediakan resize serta rotasi hasil 90°. Tambah PDF/gambar/halaman kosong, hapus dan geser halaman, serta undo/redo menentukan susunan ekspor. Hanya thumbnail kecil yang dimuat oleh galeri.
+
+Unduh halaman terpilih atau semua halaman sebagai ZIP dalam urutan tampilan. Format PNG lossless, JPEG, WebP (lossy/lossless), dan TIFF tersedia; JPEG mengisi transparansi dengan putih. PNG/JPEG/TIFF mencatat DPI; WebP mengandalkan dimensi piksel. File hasil lokal disimpan di `data/outputs/pdf-images/` dan ikut backup. Susunan browser tidak disimpan otomatis. Batas dan cara kerja ada di [PDF_IMAGES.md](PDF_IMAGES.md).
 
 ## PDF ke Word
 

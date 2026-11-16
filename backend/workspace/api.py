@@ -6,6 +6,7 @@ from workspace import services
 from workspace.models import Activity
 from workspace.productivity_api import router as productivity_router
 from workspace.pdf_conversion_api import router as pdf_router
+from workspace.pdf_images_api import router as pdf_images_router
 from workspace.capture_api import router as capture_router
 from workspace.huawei_api import router as huawei_router
 from workspace.search_api import router as search_router
@@ -32,6 +33,7 @@ api = NinjaAPI(
     openapi_url="/openapi.json" if settings.DEBUG else None,
 )
 api.add_router('/pdf', pdf_router)
+api.add_router('/pdf-images', pdf_images_router)
 api.add_router('/capture', capture_router)
 api.add_router('/huawei', huawei_router)
 api.add_router('', search_router)

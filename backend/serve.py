@@ -14,7 +14,9 @@ def main() -> None:
     from waitress import serve
 
     print(f"Ruang tersedia di http://127.0.0.1:{options.port}", flush=True)
-    serve(application, host="127.0.0.1", port=options.port, threads=4, max_request_body_size=32 * 1024 * 1024)
+    # High-resolution edited PNGs can exceed the compressed source PDF's size.
+    # Individual API handlers still enforce their own smaller upload limits.
+    serve(application, host="127.0.0.1", port=options.port, threads=4, max_request_body_size=144 * 1024 * 1024)
 
 
 if __name__ == "__main__":

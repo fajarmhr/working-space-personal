@@ -89,6 +89,7 @@ const LazyDailyUtilityPanel = lazy(() =>
 const LazyImageTools = lazy(() => import('./components/image-tools'))
 const LazyTextCompare = lazy(() => import('./components/text-compare'))
 const LazyPdfConverter = lazy(() => import('./components/pdf-converter'))
+const LazyPdfImages = lazy(() => import('./components/pdf-images'))
 const LazyCaptureStudio = lazy(() => import('./components/capture-studio'))
 const LazyHuaweiLld = lazy(() => import('./components/huawei-lld'))
 const LazyHuaweiReporting = lazy(() => import('./components/huawei-reporting'))
@@ -123,6 +124,9 @@ function ToolPanel(
       break
     case 'pdf-to-docx':
       content = <LazyPdfConverter onActivity={props.onActivity} />
+      break
+    case 'pdf-to-images':
+      content = <LazyPdfImages onActivity={props.onActivity} />
       break
     case 'capture-studio':
       content = <LazyCaptureStudio onActivity={props.onActivity} />
@@ -171,6 +175,7 @@ const icons: Record<ToolId, PhosphorIcon> = {
   'file-hash': Fingerprint,
   'image-tools': ImageSquare,
   'pdf-to-docx': FilePdf,
+  'pdf-to-images': ImageSquare,
   'capture-studio': Camera,
   'huawei-lld': FileCode,
   'huawei-reporting': ChartLine,
@@ -189,6 +194,7 @@ const huaweiSharedTools = new Set<ToolId>([
   'file-hash',
   'csv-json',
   'date-time',
+  'pdf-to-images',
 ])
 const navItems: { id: Page; label: string; icon: PhosphorIcon }[] = [
   { id: 'home', label: 'Beranda', icon: House },

@@ -38,9 +38,10 @@ Setup membutuhkan internet dan [uv](https://docs.astral.sh/uv/getting-started/in
 - **Checksum Berkas:** SHA-256 dan pencocokan checksum yang diharapkan.
 - **Olah Gambar:** resize, ekspor JPG/PNG/WebP, anotasi kotak/bulat/panah/nomor/tulisan, rotasi/skew bentuk, dan blur area.
 - **PDF ke Word:** konversi lokal ke DOCX editable, termasuk OCR scan Bahasa Indonesia/Inggris. Hasil perlu diperiksa; ejaan OCR dan layout tidak dijamin identik.
+- **PDF ke Gambar:** render halaman 150/300/600 DPI ke PNG, JPEG, WebP, atau TIFF; tambah PDF/gambar/halaman kosong, susun ulang/hapus dengan undo/redo, lalu edit anotasi, blur, resize, dan rotasi hasil. Unduh halaman terpilih atau seluruh susunan sebagai ZIP.
 - **Capture Studio:** screenshot ke satu DOCX dengan hotkey, dalam sesi Windows yang dimulai manual.
 
-Workspace menyediakan 17 tools, pencarian alat, favorit, riwayat aktivitas, tema terang/gelap/sistem, dan nama tampilan. Tugas harian dapat dibuka langsung dari sidebar. Detail batas dan cara kerja ada di [docs/TOOLS.md](docs/TOOLS.md).
+Workspace menyediakan 18 tools personal, pencarian global, favorit, riwayat aktivitas, tema terang/gelap/sistem, dan nama tampilan. Huawei workspace menambahkan alat khusus secara opsional. Tugas harian dapat dibuka langsung dari sidebar. Detail batas dan cara kerja ada di [docs/TOOLS.md](docs/TOOLS.md).
 
 **Pencarian global:** tekan `Ctrl+K` untuk mencari alat serta isi catatan, judul/detail tugas (termasuk yang selesai), dan judul/isi/kategori snippet yang tersimpan. Minimal dua karakter untuk pencarian isi. Hasil konten dapat dibuka langsung ke catatan atau item tugas/snippet yang sesuai. Pencarian tidak mencakup isi berkas hasil konversi.
 
@@ -59,6 +60,8 @@ LLD dan parameter diproses oleh backend lokal tanpa disimpan sebagai riwayat ata
 Untuk screenshot, buka Capture Studio lalu mulai sesi. Default **Ctrl+Shift+S**, alternatif **Ctrl+Alt+S**; setiap tangkapan layar utama ditambahkan ke DOCX dan disimpan otomatis. Sesi tetap berjalan saat berpindah tool atau menutup tab sampai dihentikan, atau backend berhenti.
 
 PDF ke Word menggunakan OCR otomatis untuk scan, dengan pilihan bahasa serta opsi membaca ulang seluruh halaman. Engine Tesseract bawaan PyMuPDF memakai model `tessdata_best` Indonesia/Inggris secara offline. Setup mengunduh model dari commit resmi yang dikunci dan memeriksa SHA-256. Untuk memasang ulang model saja, jalankan `powershell -ExecutionPolicy Bypass -File scripts/setup-ocr.ps1`. OCR mendekati font dan posisi sumber; periksa kembali angka, ejaan, tabel kompleks, dan scan yang buram.
+
+PDF ke Gambar merender ulang PDF pada DPI yang dipilih ketika diimpor. Dimensi piksel dipertahankan saat membuka editor; PNG lossless menjadi format awal. Tambahkan PDF lain, gambar PNG/JPG/WebP, atau halaman kosong; susun ulang dan edit sebelum ekspor. Batas satu halaman 40 MP/sisi 8.192 px, total 100 halaman/1 gigapiksel. DPI tinggi tidak mengembalikan detail yang tidak ada pada scan sumber. Susunan dan undo/redo belum disimpan otomatis; unduh hasil sebelum berpindah alat atau menutup tab. Panduan lengkap: [docs/PDF_IMAGES.md](docs/PDF_IMAGES.md).
 
 ## Development dan pemeriksaan
 
@@ -79,6 +82,7 @@ Data disimpan di folder **`data/`**, terpisah dari source dan diabaikan Git:
 | `data/.secret-key`       | Secret Django yang dibuat saat pertama berjalan       |
 | `data/queue.sqlite3`     | Antrean worker, bila worker digunakan                 |
 | `data/outputs/pdf/<uuid>/` | PDF sumber, DOCX hasil, status, dan log konversi     |
+| `data/outputs/pdf-images/<uuid>/` | PDF sumber, halaman PNG/thumbnail, gambar tambahan/edit, ekspor gambar/ZIP, dan status |
 | `data/outputs/captures/<uuid>/` | PNG tangkapan, DOCX sesi, dan status           |
 | `data/backups/`          | Backup ZIP                                            |
 

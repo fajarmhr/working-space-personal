@@ -18,6 +18,7 @@ import type {
 } from './types'
 import type { HuaweiInspection, HuaweiOptions, HuaweiPackage } from './huawei-lld'
 import type { ReportingConfig, ReportingDraftResponse } from './huawei-reporting'
+import type { PdfImageAsset, PdfImageJob, PdfImageExportOptions } from './pdf-images'
 
 let csrfToken = ''
 
@@ -59,6 +60,22 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
+  pdfImagesImport: (file: File, dpi: number) => {
+    const data = new FormData()
+    data.append('file', file)
+    data.append('dpi', String(dpi))
+    return request<PdfImageJob>('/pdf-images/import', { method: 'POST', body: data })
+  },
+  pdfImagesJob: (id: string, signal?: AbortSignal) =>
+    request<PdfImageJob>(`/pdf-images/jobs/${encodeURIComponent(id)}`, { signal }),
+  pdfImagesAsset: (file: File, dpi: number) => {
+    const data = new FormData()
+    data.append('file', file)
+    data.append('dpi', String(dpi))
+    return request<PdfImageAsset>('/pdf-images/assets', { method: 'POST', body: data })
+  },
+  pdfImagesExport: (options: PdfImageExportOptions) =>
+    request<PdfImageJob>('/pdf-images/export', { method: 'POST', body: JSON.stringify(options) }),
   search: (query: string, signal?: AbortSignal) =>
     request<SearchResults>(`/search?q=${encodeURIComponent(query)}`, { signal }),
   reportDraft: () => request<ReportingDraftResponse>('/huawei/reporting/draft'),

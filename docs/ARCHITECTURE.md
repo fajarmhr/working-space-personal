@@ -46,9 +46,17 @@ Mode development mem-proxy `/api` melalui Vite. Mode harian menggunakan Waitress
 
 SQLite menyimpan metadata dan teks catatan. WAL serta transaksi pendek membantu UI dan worker berbagi data dengan beban kecil; ini tidak menghilangkan batas satu writer SQLite. PostgreSQL dipertimbangkan jika penulisan paralel mulai menjadi kebutuhan nyata.
 
-Huey dikonfigurasi dengan database antrean SQLite terpisah dan belum digunakan oleh 17 tools saat ini. PDF dan Capture Studio memakai proses helper khusus dengan status JSON persisten; keduanya tidak membutuhkan `run_huey`. Worker Huey opsional tetap dapat dijalankan dengan `backend/.venv/Scripts/python.exe backend/manage.py run_huey` untuk adapter pekerjaan mendatang.
+Huey dikonfigurasi dengan database antrean SQLite terpisah dan belum digunakan oleh tools saat ini. PDF dan Capture Studio memakai proses helper khusus dengan status JSON persisten; keduanya tidak membutuhkan `run_huey`. Worker Huey opsional tetap dapat dijalankan dengan `backend/.venv/Scripts/python.exe backend/manage.py run_huey` untuk adapter pekerjaan mendatang.
 
 Folder `data/outputs/pdf/<uuid>/` dan `data/outputs/captures/<uuid>/` memisahkan pekerjaan/sesi. API menerima ID UUID yang divalidasi, bukan path dari browser, dan memeriksa containment saat mengakses hasil. Metadata dan hasil DOCX memakai file sementara lalu atomic replace. Backup menyertakan `data/files/` dan `data/outputs/`; hentikan pekerjaan/sesi terlebih dahulu untuk snapshot berkas yang stabil.
+
+## PDF ke gambar
+
+`pdf_images_api.py` menerima PDF melalui `POST /api/pdf-images/import`, gambar tambahan/edit melalui `/assets`, dan susunan ekspor melalui `/export`. Impor PDF dan ekspor berjalan dalam worker tetap `workspace.pdf_images_worker`; status dipantau melalui `/jobs/{uuid}`. Native render memakai batas waktu 300 detik dan Windows Job Object 1,5 GiB, tanpa shell. Gambar diakses melalui pasangan ID job/asset tervalidasi, bukan path dari browser.
+
+Asset halaman PNG bersifat immutable, dengan thumbnail terpisah agar galeri tidak memuat semua bitmap resolusi penuh. Susunan, hapus/tambah, dan undo/redo berada di browser; ekspor memakai daftar referensi asset sesuai urutan yang dipilih. Editor memakai model anotasi yang sama dengan Olah Gambar dan mempertahankan dimensi asli hingga 40 MP. Hasil edit diunggah sebagai asset PNG baru; ekspor menulis density asli untuk format yang mendukungnya. Sumber PDF tidak ditimpa.
+
+Folder `data/outputs/pdf-images/<uuid>/` termasuk backup outputs yang sudah ada. Susunan browser tidak disimpan otomatis; unduh hasil sebelum menutup panel. Waitress menerima request hingga 144 MB untuk mengakomodasi PNG edit resolusi tinggi; handler masing-masing tetap menegakkan batas spesifik (PDF 25 MB, asset gambar 128 MB). Batas render/ekspor dan format ada di `docs/PDF_IMAGES.md`.
 
 ## PDF ke DOCX
 

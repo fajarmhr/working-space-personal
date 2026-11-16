@@ -18,6 +18,7 @@ export type ToolId =
   | 'file-hash'
   | 'image-tools'
   | 'pdf-to-docx'
+  | 'pdf-to-images'
   | 'capture-studio'
   | 'huawei-lld'
   | 'huawei-reporting'
@@ -235,6 +236,11 @@ export const toolLabels: Record<ToolId, { title: string; description: string; hi
     title: 'PDF ke Word',
     description: 'Ubah PDF digital atau scan menjadi DOCX editable dengan OCR lokal.',
     hint: 'Konversi dokumen',
+  },
+  'pdf-to-images': {
+    title: 'PDF ke gambar',
+    description: 'Ubah halaman PDF menjadi gambar tajam, susun halaman, dan edit hasilnya.',
+    hint: 'Resolusi tinggi & editor',
   },
   'capture-studio': {
     title: 'Capture studio',
