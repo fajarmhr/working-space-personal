@@ -31,7 +31,7 @@ Setup membutuhkan internet dan [uv](https://docs.astral.sh/uv/getting-started/in
 - **Tugas Harian:** prioritas, tenggat, detail, filter hari ini/terlambat/selesai, dan buka kembali tugas.
 - **Pustaka Snippet:** simpan, cari, edit, dan salin template atau teks yang sering dipakai.
 - **CSV & JSON:** impor berkas atau tempel teks, konversi dua arah, dan proteksi formula spreadsheet.
-- **Bandingkan Teks:** dua editor Monaco yang dapat diedit, buka berkas teks/kode, deteksi perubahan langsung, dan salin blok dua arah.
+- **Bandingkan Teks:** dua editor, drag-and-drop berkas, simpan/tutup per sisi, sesi lokal, filter sama/berbeda/berpindah, dan panah salin tepat pada baris. [Panduan](docs/TEXT_COMPARE.md).
 - **Tanggal & Waktu:** timestamp, ISO dengan offset, zona waktu, dan selisih tanggal.
 - **URL Toolkit:** encode/decode komponen dan pemeriksaan parameter URL.
 - **UUID Generator:** UUID v4 acak, tunggal atau sekaligus.

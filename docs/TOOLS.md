@@ -31,9 +31,11 @@ Semua 18 tools personal berjalan lokal, ditambah LLD Script Builder dan kerangka
 
 ## Bandingkan teks
 
-Kedua panel Monaco dapat diedit. Tempel teks atau buka berkas di masing-masing sisi; perbedaan diperbarui otomatis tanpa tombol Bandingkan. Navigasi blok sebelumnya/berikutnya dan tombol panah dapat menyalin blok terpilih ke kiri atau kanan. Undo/redo berlaku juga untuk pembukaan berkas dan penyalinan blok. Tersedia pencarian/penggantian, bungkus baris, penanda whitespace, abaikan spasi awal/akhir, serta sembunyikan wilayah yang sama.
+Kedua panel Monaco dapat diedit pada tampilan **Semua**. Tempel teks, gunakan **Buka**, atau jatuhkan satu berkas ke sisi tujuan; dua berkas sekaligus masuk ke kiri lalu kanan. Perbedaan diperbarui otomatis. Panah salin berada pada baris yang bersangkutan, dengan undo/redo untuk edit dan penyalinan. Filter **Berbeda**, **Sama**, dan **Berpindah** menampilkan hasil baca saja dengan nomor baris sumber; pilih **Edit** untuk kembali ke editor lengkap. Blok identik yang berbeda posisi ditandai dan dapat disamakan urutannya ke kiri/kanan tanpa membuat duplikat.
 
-Deteksi encoding mendukung UTF-8, UTF-8 BOM, UTF-16 LE/BE dengan BOM. Format biner seperti PDF, gambar, dan dokumen Office ditolak. Akhir baris dinormalisasi menjadi LF di editor; unduhan selalu UTF-8/LF, bukan salinan byte asli. Isi editor tidak disimpan otomatis: unduh sebelum meninggalkan panel.
+**Simpan**, **Simpan sebagai**, dan **Tutup** tersedia per sisi; perubahan yang belum disimpan mendapatkan pilihan simpan, jangan simpan, atau batal. Pada browser yang mendukung akses berkas langsung, simpan memperbarui berkas yang dibuka; browser lain menggunakan unduhan. Encoding UTF-8, UTF-8 BOM, serta UTF-16 LE/BE dengan BOM dipertahankan. Akhir baris seragam LF/CRLF/CR dipertahankan saat disimpan; akhir baris campuran menjadi LF. Format biner ditolak.
+
+Sesi bernama menyimpan snapshot kedua panel dan pengaturan di IndexedDB browser, terpisah dari penyimpanan berkas. Draft kerja dipulihkan otomatis. Sesi/draft tidak masuk backup database Ruang; setelah dipulihkan, pilih lokasi kembali ketika pertama menyimpan berkas. Panduan dan batas deteksi perpindahan: [TEXT_COMPARE.md](TEXT_COMPARE.md).
 
 ## Konversi CSV
 

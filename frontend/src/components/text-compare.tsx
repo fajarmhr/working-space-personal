@@ -1,401 +1,109 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState, type DragEvent } from 'react'
+import { flushSync } from 'react-dom'
 import {
   ArrowDown,
   ArrowLeft,
   ArrowRight,
   ArrowUp,
+  ArrowsDownUp,
   Check,
   DownloadSimple,
   FileArrowUp,
+  FloppyDisk,
+  FolderOpen,
   GitDiff,
   LockSimple,
+  Plus,
+  Trash,
   WarningCircle,
+  X,
 } from '@phosphor-icons/react'
 import { Button } from './ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog'
 import { cn } from '../lib/utils'
-import { monaco } from '../lib/compare-editor'
-import {
-  decodeCompareFile,
-  languageFromFilename,
-  MAX_COMPARE_CHARACTERS,
-  MAX_COMPARE_FILE_BYTES,
-  normalizeForEditor,
-  replaceLineRange,
-  type CompareEncoding,
-  type CompareEol,
-} from '../lib/text-compare'
+import type { CompareFileHandle, CompareFilter } from '../lib/compare-storage'
+import { CompareGutter } from './compare-gutter'
+import { CompareFiltered } from './compare-filtered'
+import { useTextCompare, type Side } from './use-text-compare'
 
-type Side = 'left' | 'right'
-interface PaneState {
-  name: string
-  encoding: CompareEncoding
-  eol: CompareEol
-  dirty: boolean
-  lines: number
-  characters: number
-  loading: boolean
-  error: string
-}
-interface DiffState {
-  changes: monaco.editor.ILineChange[]
-  active: number
-  pending: boolean
-  leftVersion: number
-  rightVersion: number
-}
-const newPane = (): PaneState => ({
-  name: '',
-  encoding: 'UTF-8',
-  eol: 'Tidak ada',
-  dirty: false,
-  lines: 1,
-  characters: 0,
-  loading: false,
-  error: '',
-})
-
-function range(start: number, end: number) {
-  return end === 0 ? ([start, start] as const) : ([start - 1, end] as const)
-}
+const sideLabel = (side: Side) => (side === 'left' ? 'kiri' : 'kanan')
+const filters: { value: CompareFilter; label: string }[] = [
+  { value: 'all', label: 'Semua' },
+  { value: 'different', label: 'Berbeda' },
+  { value: 'same', label: 'Sama' },
+  { value: 'moved', label: 'Berpindah' },
+]
 
 export default function TextCompare({ onActivity }: { onActivity: (action: string) => void }) {
-  const container = useRef<HTMLDivElement>(null)
-  const editorRef = useRef<monaco.editor.IStandaloneDiffEditor | null>(null)
-  const models = useRef<Record<Side, monaco.editor.ITextModel> | null>(null)
-  const baselines = useRef({ left: 1, right: 1 })
-  const tickets = useRef({ left: 0, right: 0 })
-  const activity = useRef(onActivity)
-  activity.current = onActivity
-  const activityTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const sessionRecorded = useRef(false)
-  const oversized = useRef(false)
+  const work = useTextCompare(onActivity)
+  const { panes, diff, options, ready } = work
   const inputs = { left: useRef<HTMLInputElement>(null), right: useRef<HTMLInputElement>(null) }
-  const [panes, setPanes] = useState<Record<Side, PaneState>>({ left: newPane(), right: newPane() })
-  const [ready, setReady] = useState(false)
-  const [failure, setFailure] = useState('')
-  const [notice, setNotice] = useState('')
-  const [ignoreSpace, setIgnoreSpace] = useState(false)
-  const [wrap, setWrap] = useState(false)
-  const [whitespace, setWhitespace] = useState(false)
-  const [collapse, setCollapse] = useState(false)
-  const [diff, setDiff] = useState<DiffState>({
-    changes: [],
-    active: 0,
-    pending: true,
-    leftVersion: 0,
-    rightVersion: 0,
-  })
-  const diffRef = useRef(diff)
-  diffRef.current = diff
-
-  useEffect(() => {
-    if (!container.current) return
-    let mounted = true
-    let editor: monaco.editor.IStandaloneDiffEditor | undefined
-    const cleanup: monaco.IDisposable[] = []
-    let observer: MutationObserver | undefined
-    try {
-      const left = monaco.editor.createModel('', 'plaintext')
-      const right = monaco.editor.createModel('', 'plaintext')
-      models.current = { left, right }
-      baselines.current = {
-        left: left.getAlternativeVersionId(),
-        right: right.getAlternativeVersionId(),
-      }
-      editor = monaco.editor.createDiffEditor(container.current, {
-        originalEditable: true,
-        originalAriaLabel: 'Editor teks kiri',
-        modifiedAriaLabel: 'Editor teks kanan',
-        readOnly: false,
-        automaticLayout: true,
-        renderSideBySide: true,
-        useInlineViewWhenSpaceIsLimited: false,
-        enableSplitViewResizing: true,
-        ignoreTrimWhitespace: false,
-        diffAlgorithm: 'advanced',
-        maxComputationTime: 5000,
-        maxFileSize: 8,
-        renderMarginRevertIcon: false,
-        renderGutterMenu: false,
-        renderIndicators: true,
-        renderOverviewRuler: true,
-        minimap: { enabled: false },
-        fontFamily: '"Geist Mono", monospace',
-        fontSize: 12,
-        lineHeight: 22,
-        lineNumbersMinChars: 3,
-        scrollBeyondLastLine: false,
-        padding: { top: 15, bottom: 15 },
-        wordWrap: 'off',
-        diffWordWrap: 'off',
-        renderWhitespace: 'none',
-        editContext: false,
-        accessibilitySupport: 'auto',
-        links: false,
-        renderValidationDecorations: 'off',
-        stickyScroll: { enabled: false },
-        unicodeHighlight: { ambiguousCharacters: false },
-        scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10 },
-        hideUnchangedRegions: { enabled: false, contextLineCount: 3, minimumLineCount: 8 },
-      })
-      editorRef.current = editor
-      editor.setModel({ original: left, modified: right })
-      function theme() {
-        monaco.editor.setTheme(
-          document.documentElement.classList.contains('dark')
-            ? 'ruang-compare-dark'
-            : 'ruang-compare-light',
-        )
-      }
-      theme()
-      observer = new MutationObserver(theme)
-      observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
-      function changed(side: Side) {
-        const model = side === 'left' ? left : right
-        if (model.getValueLength() > MAX_COMPARE_CHARACTERS && !oversized.current) {
-          oversized.current = true
-          model.undo()
-          oversized.current = false
-          setFailure('Setiap editor maksimal 2 juta karakter. Perubahan terakhir dibatalkan.')
-          return
-        }
-        if (!mounted) return
-        setPanes((previous) => ({
-          ...previous,
-          [side]: {
-            ...previous[side],
-            dirty: model.getAlternativeVersionId() !== baselines.current[side],
-            lines: model.getLineCount(),
-            characters: model.getValueLength(),
-          },
-        }))
-        setDiff((previous) => ({ ...previous, pending: true }))
-        clearTimeout(activityTimer.current)
-        activityTimer.current = setTimeout(() => {
-          if (!sessionRecorded.current && (left.getValueLength() || right.getValueLength())) {
-            sessionRecorded.current = true
-            activity.current('Membandingkan berkas atau teks secara langsung')
-          }
-        }, 1200)
-      }
-      cleanup.push(
-        left.onDidChangeContent(() => changed('left')),
-        right.onDidChangeContent(() => changed('right')),
-      )
-      cleanup.push(
-        editor.onDidUpdateDiff(() => {
-          if (!mounted) return
-          const changes = editor!.getLineChanges()
-          setDiff((previous) => ({
-            changes: changes ?? [],
-            active: Math.min(previous.active, Math.max(0, (changes?.length ?? 0) - 1)),
-            pending: changes === null,
-            leftVersion: left.getVersionId(),
-            rightVersion: right.getVersionId(),
-          }))
-        }),
-      )
-      setReady(true)
-    } catch (caught) {
-      setFailure(
-        caught instanceof Error ? caught.message : 'Editor belum dapat dibuka. Muat ulang halaman.',
-      )
-    }
-    return () => {
-      mounted = false
-      tickets.current.left += 1
-      tickets.current.right += 1
-      clearTimeout(activityTimer.current)
-      observer?.disconnect()
-      cleanup.forEach((item) => item.dispose())
-      editor?.dispose()
-      models.current?.left.dispose()
-      models.current?.right.dispose()
-      editorRef.current = null
-      models.current = null
-    }
-  }, [])
-
-  useEffect(() => {
-    const editor = editorRef.current
-    editor?.updateOptions({
-      ignoreTrimWhitespace: ignoreSpace,
-      wordWrap: wrap ? 'on' : 'off',
-      diffWordWrap: wrap ? 'on' : 'off',
-      renderWhitespace: whitespace ? 'all' : 'none',
-      hideUnchangedRegions: { enabled: collapse, contextLineCount: 3, minimumLineCount: 8 },
-    })
-    // Monaco resets sub-editor labels when diff options change.
-    editor?.getOriginalEditor().updateOptions({ ariaLabel: 'Editor teks kiri' })
-    editor?.getModifiedEditor().updateOptions({ ariaLabel: 'Editor teks kanan' })
-  }, [ignoreSpace, wrap, whitespace, collapse])
-
-  async function loadFile(side: Side, file: File | undefined) {
-    if (!file || !models.current) return
-    const ticket = ++tickets.current[side]
-    const model = models.current[side]
-    const version = model.getVersionId()
-    setPanes((previous) => ({
-      ...previous,
-      [side]: { ...previous[side], loading: true, error: '' },
-    }))
-    try {
-      if (file.size > MAX_COMPARE_FILE_BYTES) throw new Error('Ukuran setiap berkas maksimal 4 MB.')
-      const decoded = decodeCompareFile(await file.arrayBuffer(), file.name)
-      if (ticket !== tickets.current[side] || model.isDisposed()) return
-      if (version !== model.getVersionId())
-        throw new Error(
-          'Isi editor berubah saat berkas dibaca. Buka berkas lagi setelah selesai mengedit.',
-        )
-      const value = normalizeForEditor(decoded.text)
-      // Loading is undoable, so a replaced draft remains recoverable with Ctrl+Z.
-      const pane =
-        side === 'left'
-          ? editorRef.current!.getOriginalEditor()
-          : editorRef.current!.getModifiedEditor()
-      pane.pushUndoStop()
-      pane.executeEdits('ruang-open-file', [{ range: model.getFullModelRange(), text: value }])
-      pane.pushUndoStop()
-      monaco.editor.setModelLanguage(model, languageFromFilename(file.name))
-      baselines.current[side] = model.getAlternativeVersionId()
-      setPanes((previous) => ({
-        ...previous,
-        [side]: {
-          name: file.name,
-          encoding: decoded.encoding,
-          eol: decoded.eol,
-          dirty: false,
-          lines: model.getLineCount(),
-          characters: model.getValueLength(),
-          loading: false,
-          error: '',
-        },
-      }))
-      setNotice(
-        `${side === 'left' ? 'Berkas kiri' : 'Berkas kanan'} dibuka. Perbandingan diperbarui otomatis.`,
-      )
-    } catch (caught) {
-      if (ticket === tickets.current[side])
-        setPanes((previous) => ({
-          ...previous,
-          [side]: {
-            ...previous[side],
-            error: caught instanceof Error ? caught.message : 'Berkas belum dapat dibaca.',
-          },
-        }))
-    } finally {
-      if (ticket === tickets.current[side])
-        setPanes((previous) => ({ ...previous, [side]: { ...previous[side], loading: false } }))
-    }
+  const [dragging, setDragging] = useState<Side | 'both' | null>(null)
+  const [removeOpen, setRemoveOpen] = useState(false)
+  const loading = panes.left.loading || panes.right.loading
+  const canAct = ready && !loading && !diff.pending && diff.changes.length > 0
+  function editOriginal(side: Side, line: number) {
+    flushSync(() => work.setOptions((previous) => ({ ...previous, filter: 'all' })))
+    const editor = work.editorRef.current
+    editor?.layout()
+    const pane = side === 'left' ? editor?.getOriginalEditor() : editor?.getModifiedEditor()
+    pane?.setPosition({ lineNumber: line, column: 1 })
+    pane?.revealLineInCenter(line)
+    pane?.focus()
   }
 
-  function selectChange(index: number) {
-    const editor = editorRef.current
-    const changes = diffRef.current.changes
-    if (!editor || !changes.length || diffRef.current.pending) return
-    const selected = (index + changes.length) % changes.length
-    const change = changes[selected]!
-    const original = editor.getOriginalEditor()
-    const modified = editor.getModifiedEditor()
-    original.setPosition({ lineNumber: Math.max(1, change.originalStartLineNumber), column: 1 })
-    modified.setPosition({ lineNumber: Math.max(1, change.modifiedStartLineNumber), column: 1 })
-    original.revealLineInCenter(Math.max(1, change.originalStartLineNumber))
-    modified.revealLineInCenter(Math.max(1, change.modifiedStartLineNumber))
-    setDiff((previous) => ({ ...previous, active: selected }))
+  function drag(event: DragEvent, side?: Side) {
+    if (!event.dataTransfer.types.includes('Files')) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.dataTransfer.dropEffect = 'copy'
+    setDragging(event.dataTransfer.items.length === 2 ? 'both' : (side ?? 'both'))
   }
-
-  function copyChange(from: Side) {
-    const state = diffRef.current
-    if (!editorRef.current || !models.current || state.pending) return
-    const { left, right } = models.current
-    if (left.getVersionId() !== state.leftVersion || right.getVersionId() !== state.rightVersion) {
-      setNotice('Perbandingan sedang diperbarui. Coba lagi setelah penanda selesai.')
+  async function drop(event: DragEvent, side?: Side) {
+    event.preventDefault()
+    event.stopPropagation()
+    setDragging(null)
+    if (!ready || loading) return
+    const items = [...event.dataTransfer.items].filter((item) => item.kind === 'file')
+    const files = [...event.dataTransfer.files]
+    if (!files.length) return
+    if (files.length > 2) {
+      work.setFailure(
+        'Jatuhkan satu berkas ke panel tujuan, atau dua berkas sekaligus (kiri lalu kanan).',
+      )
       return
     }
-    const change = state.changes[state.active]
-    if (!change) return
-    const leftRange = range(change.originalStartLineNumber, change.originalEndLineNumber)
-    const rightRange = range(change.modifiedStartLineNumber, change.modifiedEndLineNumber)
-    const targetSide = from === 'left' ? 'right' : 'left'
-    const source = models.current[from]
-    const target = models.current[targetSide]
-    try {
-      const sourceRange = from === 'left' ? leftRange : rightRange
-      const targetRange = from === 'left' ? rightRange : leftRange
-      const value = replaceLineRange(
-        target.getValue(),
-        source.getValue(),
-        sourceRange[0],
-        sourceRange[1],
-        targetRange[0],
-        targetRange[1],
-      )
-      const pane =
-        targetSide === 'left'
-          ? editorRef.current.getOriginalEditor()
-          : editorRef.current.getModifiedEditor()
-      pane.pushUndoStop()
-      pane.executeEdits('ruang-copy-change', [{ range: target.getFullModelRange(), text: value }])
-      pane.pushUndoStop()
-      setNotice(
-        `Blok disalin ke ${targetSide === 'left' ? 'kiri' : 'kanan'}. Ctrl+Z untuk membatalkan.`,
-      )
-    } catch (caught) {
-      setFailure(caught instanceof Error ? caught.message : 'Blok belum dapat disalin.')
+    const handles = items.map((item) => {
+      const entry = item as DataTransferItem & {
+        getAsFileSystemHandle?: () => Promise<CompareFileHandle | null>
+      }
+      return entry.getAsFileSystemHandle?.().catch(() => null) ?? Promise.resolve(null)
+    })
+    for (let index = 0; index < files.length; index++) {
+      const target: Side = files.length === 2 ? (index === 0 ? 'left' : 'right') : (side ?? 'left')
+      await work.loadFile(target, files[index]!, (await handles[index]) ?? null)
     }
   }
 
-  function save(side: Side) {
-    const model = models.current?.[side]
-    if (!model) return
-    const url = URL.createObjectURL(
-      new Blob([model.getValue(monaco.editor.EndOfLinePreference.LF)], {
-        type: 'text/plain;charset=utf-8',
-      }),
-    )
-    const link = document.createElement('a')
-    link.href = url
-    link.download = panes[side].name || `teks-${side === 'left' ? 'kiri' : 'kanan'}.txt`
-    link.click()
-    setTimeout(() => URL.revokeObjectURL(url), 1000)
-    baselines.current[side] = model.getAlternativeVersionId()
-    setPanes((previous) => ({ ...previous, [side]: { ...previous[side], dirty: false } }))
-    setNotice('Unduhan disiapkan dalam UTF-8 dengan akhir baris LF.')
-  }
-
-  const loading = panes.left.loading || panes.right.loading
-  const noChanges = diff.changes.length === 0
-  const canAct = ready && !diff.pending && !noChanges && !loading
-  const added = diff.changes.reduce(
-    (total, change) =>
-      total +
-      (change.modifiedEndLineNumber
-        ? change.modifiedEndLineNumber - change.modifiedStartLineNumber + 1
-        : 0),
-    0,
-  )
-  const removed = diff.changes.reduce(
-    (total, change) =>
-      total +
-      (change.originalEndLineNumber
-        ? change.originalEndLineNumber - change.originalStartLineNumber + 1
-        : 0),
-    0,
-  )
   return (
-    <section className="min-w-0" aria-label="Perbandingan teks langsung">
+    <section
+      className="min-w-0"
+      aria-label="Perbandingan teks langsung"
+      onDragOver={(event) => drag(event)}
+      onDrop={(event) => void drop(event)}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragging(null)
+      }}
+    >
       <div className="space-y-4 border-b border-border p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-xs">
+          <div className="flex items-center gap-2 text-xs font-medium">
             <GitDiff size={18} className="text-primary" />
-            <span className="font-medium">Editor perbandingan langsung</span>
-            <span className="rounded-full bg-accent-soft px-2 py-1 text-[9px] text-primary">
-              Otomatis
-            </span>
+            Text Compare
           </div>
-          <div
+          <p
             role="status"
             aria-live="polite"
             className="font-mono text-[11px] text-muted-foreground"
@@ -403,200 +111,448 @@ export default function TextCompare({ onActivity }: { onActivity: (action: strin
             {!ready
               ? 'Menyiapkan editor…'
               : loading
-                ? 'Membaca berkas…'
+                ? 'Memproses berkas…'
                 : diff.pending
                   ? 'Memperbarui perbedaan…'
                   : !panes.left.characters && !panes.right.characters
-                    ? 'Mulai mengetik atau buka dua berkas'
-                    : noChanges
-                      ? ignoreSpace
+                    ? 'Ketik, buka, atau jatuhkan berkas ke panel'
+                    : !diff.changes.length
+                      ? options.ignoreSpace
                         ? 'Sama dengan aturan spasi aktif'
                         : 'Kedua teks sama'
-                      : `${diff.changes.length} blok berbeda · +${added} / −${removed} baris`}
-          </div>
+                      : `${diff.changes.length} blok berbeda · ${diff.moves.length} blok berpindah`}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-end gap-2 border-b border-border pb-4">
+          <label className="grid min-w-40 flex-1 gap-1.5 text-[11px] text-muted-foreground">
+            Sesi tersimpan
+            <select
+              aria-label="Sesi tersimpan"
+              className="h-9 min-w-0 rounded-lg border border-border bg-surface px-2 text-xs text-foreground"
+              value={work.sessionId}
+              disabled={!ready || loading || work.sessionBusy}
+              onChange={(event) => void work.loadSession(event.target.value)}
+            >
+              <option value="">Pilih sesi…</option>
+              {work.sessions.map((session) => (
+                <option key={session.id} value={session.id}>
+                  {session.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid min-w-40 flex-1 gap-1.5 text-[11px] text-muted-foreground">
+            Nama sesi
+            <input
+              aria-label="Nama sesi"
+              value={work.sessionName}
+              maxLength={120}
+              placeholder="Contoh: script sebelum dan sesudah"
+              className="h-9 min-w-0 rounded-lg border border-border bg-surface px-3 text-xs text-foreground"
+              onChange={(event) => work.setSessionName(event.target.value)}
+            />
+          </label>
+          <Button
+            size="sm"
+            className="h-9"
+            disabled={!ready || loading || work.sessionBusy}
+            onClick={() => void work.saveSession()}
+          >
+            <FloppyDisk size={15} />
+            {work.sessionBusy ? 'Menyimpan…' : 'Simpan sesi'}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-9"
+            aria-label="Hapus sesi tersimpan"
+            title="Hapus sesi tersimpan"
+            disabled={!work.sessionId || work.sessionBusy}
+            onClick={() => setRemoveOpen(true)}
+          >
+            <Trash size={16} />
+          </Button>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap gap-1" role="group" aria-label="Filter perbandingan">
+            {filters.map((filter) => (
+              <Button
+                key={filter.value}
+                size="sm"
+                variant={options.filter === filter.value ? 'default' : 'ghost'}
+                aria-pressed={options.filter === filter.value}
+                disabled={!ready || diff.pending}
+                onClick={() =>
+                  work.setOptions((previous) => ({ ...previous, filter: filter.value }))
+                }
+              >
+                {filter.value === 'moved' && <ArrowsDownUp size={14} />}
+                {filter.label}
+              </Button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1">
             <Button
-              variant="secondary"
               size="sm"
-              aria-label="Perbedaan sebelumnya"
+              variant="secondary"
               title="Perbedaan sebelumnya"
+              aria-label="Perbedaan sebelumnya"
               disabled={!canAct}
-              onClick={() => selectChange(diff.active - 1)}
+              onClick={() => work.selectChange(diff.active - 1)}
             >
-              <ArrowUp size={15} />
+              <ArrowUp size={14} />
             </Button>
-            <span className="min-w-16 text-center font-mono text-[11px] text-muted-foreground">
-              {noChanges ? '0 / 0' : `${diff.active + 1} / ${diff.changes.length}`}
+            <span className="min-w-14 text-center font-mono text-[11px] text-muted-foreground">
+              {diff.changes.length ? `${diff.active + 1} / ${diff.changes.length}` : '0 / 0'}
             </span>
             <Button
-              variant="secondary"
               size="sm"
-              aria-label="Perbedaan berikutnya"
+              variant="secondary"
               title="Perbedaan berikutnya"
+              aria-label="Perbedaan berikutnya"
               disabled={!canAct}
-              onClick={() => selectChange(diff.active + 1)}
+              onClick={() => work.selectChange(diff.active + 1)}
             >
-              <ArrowDown size={15} />
-            </Button>
-            <span className="mx-1 h-5 border-l border-border" />
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={!canAct}
-              title="Salin blok perbedaan terpilih dari kanan ke kiri"
-              onClick={() => copyChange('right')}
-            >
-              <ArrowLeft size={15} />
-              Ke kiri
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={!canAct}
-              title="Salin blok perbedaan terpilih dari kiri ke kanan"
-              onClick={() => copyChange('left')}
-            >
-              Ke kanan
-              <ArrowRight size={15} />
+              <ArrowDown size={14} />
             </Button>
           </div>
-          <span className="text-[10px] text-muted-foreground">
-            Ctrl+F cari · Ctrl+H ganti · Ctrl+Z undo
-          </span>
         </div>
-        <div className="flex flex-wrap gap-x-5 gap-y-3 text-[11px] text-muted-foreground">
-          {[
-            {
-              label: 'Abaikan spasi tepi',
-              checked: ignoreSpace,
-              set: (value: boolean) => {
-                setIgnoreSpace(value)
-                setDiff((previous) => ({ ...previous, pending: true }))
-              },
-            },
-            { label: 'Bungkus baris', checked: wrap, set: setWrap },
-            { label: 'Tampilkan spasi', checked: whitespace, set: setWhitespace },
-            { label: 'Lipat baris yang sama', checked: collapse, set: setCollapse },
-          ].map((option) => (
-            <label key={option.label} className="flex cursor-pointer items-center gap-2">
+        <div className="flex flex-wrap gap-x-5 gap-y-2 text-[11px] text-muted-foreground">
+          {(
+            [
+              { label: 'Abaikan spasi tepi', key: 'ignoreSpace' },
+              { label: 'Bungkus baris', key: 'wrap' },
+              { label: 'Tampilkan spasi', key: 'whitespace' },
+            ] as const
+          ).map((option) => (
+            <label key={option.key} className="flex cursor-pointer items-center gap-2">
               <input
                 type="checkbox"
-                checked={option.checked}
-                onChange={(event) => option.set(event.target.checked)}
+                checked={options[option.key]}
+                disabled={!ready}
                 className="size-3.5 accent-primary"
+                onChange={(event) =>
+                  work.setOptions((previous) => ({
+                    ...previous,
+                    [option.key]: event.target.checked,
+                  }))
+                }
               />
               {option.label}
             </label>
           ))}
+          <span className="ml-auto">
+            Panah di baris: salin ·{' '}
+            <span className="text-amber-700 dark:text-amber-300">kuning: berpindah</span>
+          </span>
         </div>
+        {options.filter !== 'all' && (
+          <p className="text-[11px] text-muted-foreground">
+            Tampilan filter mempertahankan nomor baris asli. Klik pensil di baris untuk mengedit
+            pada tampilan Semua.
+          </p>
+        )}
       </div>
       <div className="overflow-x-auto">
-        <div className="min-w-[680px]">
-          <div className="grid grid-cols-2 divide-x divide-border border-b border-border bg-muted/40">
+        <div className="min-w-[720px]">
+          <div className="grid grid-cols-2 divide-x divide-border border-b border-border bg-muted/30">
             {(['left', 'right'] as const).map((side) => (
-              <div key={side} className="min-w-0 p-4">
-                <div className="mb-3 flex items-center justify-between gap-2">
-                  <label className="flex items-center gap-2 text-[11px] font-medium">
-                    <span
-                      className={cn(
-                        'size-1.5 rounded-full',
-                        side === 'left' ? 'bg-danger/65' : 'bg-primary/65',
-                      )}
-                    />
-                    {side === 'left' ? 'Versi kiri' : 'Versi kanan'}
-                  </label>
-                  <div className="relative flex gap-1.5">
+              <div
+                key={side}
+                className={cn(
+                  'relative min-w-0 px-4 py-3',
+                  (dragging === side || dragging === 'both') &&
+                    'bg-accent-soft ring-2 ring-inset ring-primary',
+                )}
+                onDragOver={(event) => drag(event, side)}
+                onDrop={(event) => void drop(event, side)}
+              >
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-medium">
+                    {side === 'left' ? 'Kiri' : 'Kanan'}
+                  </span>
+                  <div className="flex items-center gap-1">
                     <input
                       ref={inputs[side]}
                       type="file"
                       className="sr-only"
                       tabIndex={-1}
-                      aria-label={`Pilih berkas ${side === 'left' ? 'kiri' : 'kanan'}`}
+                      aria-label={`Pilih berkas ${sideLabel(side)}`}
                       onChange={(event) => {
-                        void loadFile(side, event.target.files?.[0])
+                        const file = event.target.files?.[0]
+                        if (file) void work.loadFile(side, file)
                         event.target.value = ''
                       }}
                     />
                     <Button
                       variant="secondary"
                       size="sm"
-                      disabled={!ready || panes[side].loading}
-                      onClick={() => inputs[side].current?.click()}
-                      aria-label={`Buka berkas ${side === 'left' ? 'kiri' : 'kanan'}`}
+                      disabled={!ready || loading}
+                      aria-label={`Buka berkas ${sideLabel(side)}`}
+                      onClick={() => void work.openFile(side, () => inputs[side].current?.click())}
                     >
-                      <FileArrowUp size={14} />
+                      <FolderOpen size={14} />
                       Buka
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
-                      disabled={!ready}
-                      onClick={() => save(side)}
-                      aria-label={`Unduh teks ${side === 'left' ? 'kiri' : 'kanan'}`}
+                      disabled={!ready || loading || !panes[side].open}
+                      title="Simpan berkas"
+                      aria-label={`Simpan berkas ${sideLabel(side)}`}
+                      onClick={() => void work.saveFile(side)}
+                    >
+                      <FloppyDisk size={15} />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={!ready || loading || !panes[side].open}
+                      title="Simpan sebagai…"
+                      aria-label={`Simpan sebagai berkas ${sideLabel(side)}`}
+                      onClick={() => void work.saveFile(side, true)}
                     >
                       <DownloadSimple size={15} />
                     </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={!ready || loading || !panes[side].open}
+                      title="Tutup berkas"
+                      aria-label={`Tutup berkas ${sideLabel(side)}`}
+                      onClick={() => void work.closeFile(side)}
+                    >
+                      <X size={15} />
+                    </Button>
                   </div>
                 </div>
-                <p className="truncate text-[12px] font-medium" title={panes[side].name}>
-                  {panes[side].name || 'Teks baru'}
+                <p className="truncate text-xs font-medium" title={panes[side].name}>
+                  {panes[side].open ? panes[side].name || 'Teks baru' : 'Berkas ditutup'}
                   {panes[side].dirty && (
                     <span className="ml-1.5 text-primary" aria-label="Diubah">
                       *
                     </span>
                   )}
                 </p>
-                <p className="mt-1.5 font-mono text-[9px] leading-5 text-muted-foreground">
+                <p className="mt-1 font-mono text-[10px] leading-5 text-muted-foreground">
                   {panes[side].characters.toLocaleString('id-ID')} karakter ·{' '}
-                  {panes[side].lines.toLocaleString('id-ID')} baris · {panes[side].encoding}
-                  {panes[side].name && ` · ${panes[side].eol}`}
+                  {panes[side].lines.toLocaleString('id-ID')} baris · {panes[side].encoding} ·{' '}
+                  {panes[side].eol}
                 </p>
                 {panes[side].error && (
-                  <p role="alert" className="mt-2 text-[11px] leading-5 text-danger">
+                  <p role="alert" className="mt-2 text-xs text-danger">
                     {panes[side].error}
                   </p>
                 )}
               </div>
             ))}
           </div>
-          <div ref={container} className="h-[clamp(420px,60dvh,760px)] w-full" />
+          <div
+            className="relative"
+            onDragOver={(event) => {
+              const bounds = event.currentTarget.getBoundingClientRect()
+              drag(event, event.clientX < bounds.left + bounds.width / 2 ? 'left' : 'right')
+            }}
+            onDrop={(event) => {
+              const bounds = event.currentTarget.getBoundingClientRect()
+              void drop(event, event.clientX < bounds.left + bounds.width / 2 ? 'left' : 'right')
+            }}
+          >
+            <div
+              ref={work.container}
+              className={cn(
+                'h-[clamp(440px,62dvh,860px)] w-full',
+                options.filter !== 'all' && 'hidden',
+              )}
+            />
+            {options.filter === 'all' ? (
+              <CompareGutter
+                editor={work.editorRef.current}
+                changes={diff.changes}
+                moves={diff.moves}
+                pending={diff.pending || loading}
+                copy={work.copyChange}
+                reconcile={work.moveBlock}
+              />
+            ) : (
+              <CompareFiltered
+                leftText={panes.left.text}
+                rightText={panes.right.text}
+                changes={diff.changes}
+                moves={diff.moves}
+                filter={options.filter}
+                ignoreSpace={options.ignoreSpace}
+                pending={diff.pending || loading}
+                copy={work.copyChange}
+                reconcile={work.moveBlock}
+                onEdit={editOriginal}
+              />
+            )}
+            {(['left', 'right'] as const)
+              .filter((side) => !panes[side].open)
+              .map((side) => (
+                <div
+                  key={side}
+                  className={cn(
+                    'absolute inset-y-0 grid w-1/2 place-content-center gap-3 bg-surface text-center',
+                    side === 'left' ? 'left-0 border-r border-border' : 'right-0',
+                  )}
+                >
+                  <FileArrowUp size={25} className="mx-auto text-muted-foreground" />
+                  <p className="text-xs text-muted-foreground">
+                    Jatuhkan berkas ke panel {sideLabel(side)}
+                  </p>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => void work.closeFile(side, true)}
+                  >
+                    <Plus size={14} />
+                    Teks baru
+                  </Button>
+                </div>
+              ))}
+            {dragging && (
+              <div
+                className={cn(
+                  'pointer-events-none absolute inset-y-0 grid place-items-center border-2 border-dashed border-primary bg-accent-soft/90 text-sm font-medium text-primary',
+                  dragging === 'both'
+                    ? 'inset-x-0'
+                    : dragging === 'left'
+                      ? 'left-0 w-1/2'
+                      : 'right-0 w-1/2',
+                )}
+              >
+                {dragging === 'both'
+                  ? 'Dua berkas: kiri lalu kanan'
+                  : `Buka berkas di ${sideLabel(dragging)}`}
+              </div>
+            )}
+          </div>
         </div>
       </div>
-      {failure && (
+      {diff.moves.length > 0 && (
+        <div className="border-t border-border px-4 py-3">
+          <div className="mb-2 flex items-center gap-2 text-xs font-medium text-amber-700 dark:text-amber-300">
+            <ArrowsDownUp size={15} />
+            Isi identik, posisi berbeda
+          </div>
+          <div className="max-h-40 overflow-y-auto divide-y divide-border">
+            {diff.moves.map((move) => (
+              <div
+                key={move.id}
+                className="flex flex-wrap items-center justify-between gap-2 py-2 text-[11px]"
+              >
+                <span className="font-mono text-muted-foreground">
+                  Kiri {move.leftStart + 1}–{move.leftEnd} ↔ Kanan {move.rightStart + 1}–
+                  {move.rightEnd}
+                </span>
+                <div className="flex gap-1">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={!canAct}
+                    onClick={() => work.moveBlock('right', move)}
+                  >
+                    <ArrowLeft size={13} />
+                    Samakan ke kiri
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={!canAct}
+                    onClick={() => work.moveBlock('left', move)}
+                  >
+                    Samakan ke kanan
+                    <ArrowRight size={13} />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {work.failure && (
         <div
           role="alert"
           className="m-4 flex items-start gap-2 rounded-xl bg-danger/5 px-4 py-3 text-xs leading-6 text-danger"
         >
-          <WarningCircle size={17} className="mt-1 shrink-0" />
-          <span className="min-w-0 flex-1">{failure}</span>
+          <WarningCircle size={17} className="mt-0.5 shrink-0" />
+          <span className="min-w-0 flex-1">{work.failure}</span>
           <button
             type="button"
-            onClick={() => setFailure('')}
+            onClick={() => work.setFailure('')}
+            className="underline"
             aria-label="Tutup pesan error"
-            className="text-xs underline"
           >
             Tutup
           </button>
         </div>
       )}
-      <div className="flex flex-wrap items-start justify-between gap-3 border-t border-border px-4 py-3 text-[10px] leading-5 text-muted-foreground">
-        <p className="flex items-start gap-2">
-          <LockSimple size={14} className="mt-0.5 shrink-0 text-primary" />
-          Teks/kode UTF-8 atau UTF-16 dengan BOM · 4 MB per berkas · 2 juta karakter per editor.
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-3 text-[10px] leading-5 text-muted-foreground">
+        <p className="flex items-center gap-1.5">
+          <LockSimple size={13} />
+          Lokal di browser · Draft otomatis · UTF-8 / UTF-16 BOM · Maks. 4 MB per file
         </p>
-        <p className="sm:hidden">Geser area editor untuk melihat kedua panel.</p>
+        <span>Ctrl+S simpan · Ctrl+Shift+S simpan sebagai · Ctrl+Z undo</span>
+        <p className="w-full sm:hidden">Geser area editor ke samping untuk melihat kedua panel.</p>
       </div>
-      {notice && (
+      {work.notice && (
         <p
           role="status"
-          className="flex items-start gap-2 px-4 pb-4 text-[11px] leading-5 text-primary"
+          className="flex items-start gap-2 px-4 pb-3 text-[11px] leading-5 text-primary"
         >
           <Check size={14} className="mt-0.5 shrink-0" />
-          {notice}
+          {work.notice}
         </p>
       )}
+      <Dialog
+        open={!!work.confirm}
+        onOpenChange={(open) => {
+          if (!open) work.confirm?.resolve('cancel')
+        }}
+      >
+        <DialogContent>
+          <DialogTitle className="pr-8 text-lg font-semibold">Simpan perubahan berkas?</DialogTitle>
+          <DialogDescription className="mt-3 text-sm leading-6 text-muted-foreground">
+            Berkas {work.confirm?.sides.map(sideLabel).join(' dan ')} sudah diubah. Simpan sebelum
+            melanjutkan.
+          </DialogDescription>
+          <div className="mt-6 flex flex-wrap justify-end gap-2">
+            <Button variant="ghost" onClick={() => work.confirm?.resolve('cancel')}>
+              Batal
+            </Button>
+            <Button variant="secondary" onClick={() => work.confirm?.resolve('discard')}>
+              Jangan simpan
+            </Button>
+            <Button onClick={() => work.confirm?.resolve('save')}>
+              <FloppyDisk size={15} />
+              Simpan dan lanjutkan
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={removeOpen} onOpenChange={setRemoveOpen}>
+        <DialogContent>
+          <DialogTitle className="pr-8 text-lg font-semibold">Hapus sesi tersimpan?</DialogTitle>
+          <DialogDescription className="mt-3 text-sm leading-6 text-muted-foreground">
+            Snapshot sesi ini akan dihapus dari browser.
+          </DialogDescription>
+          <div className="mt-6 flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setRemoveOpen(false)}>
+              Batal
+            </Button>
+            <Button
+              onClick={() => {
+                setRemoveOpen(false)
+                void work.removeSession()
+              }}
+            >
+              Hapus sesi
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </section>
   )
 }

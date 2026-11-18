@@ -2,6 +2,14 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+.monaco-editor .compare-moved-line {
+  background-color: #c68b191c;
+  border-bottom: 1px dotted #b88035;
+}
+.monaco-editor .compare-moved-edge {
+  border-left: 3px solid #b88035;
+}
+
 @theme inline {
   --font-sans: 'Geist', sans-serif;
   --font-mono: 'Geist Mono', monospace;

@@ -49,3 +49,10 @@ for (const [name, dark] of [
 }
 
 export { monaco }
+
+/** The pinned Monaco diff widget emits interim mappings while recomputing. */
+export async function waitForCompareDiff(editor: monaco.editor.IStandaloneDiffEditor) {
+  await (
+    editor as monaco.editor.IStandaloneDiffEditor & { waitForDiff(): Promise<void> }
+  ).waitForDiff()
+}
